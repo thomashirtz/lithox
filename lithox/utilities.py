@@ -1,7 +1,11 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
+from pathlib import Path
+from typing import Union
+
 import jax.numpy as jnp
+from PIL import Image
 from jax import jit
 
 
@@ -73,3 +77,29 @@ def center_pad_2d(arr: jnp.ndarray, out_shape: tuple[int, int]) -> jnp.ndarray:
     ]
 
     return jnp.pad(arr, pad_width, mode="constant")
+
+
+def load_image(
+    path: Union[str, Path],
+    size: int,
+    dtype: jnp.dtype = jnp.float32,
+) -> jnp.ndarray:
+    """
+    Load a lithography image, convert to grayscale, resize, and normalize.
+
+    Args:
+        path: Path to the image file.
+        size: Target width and height (pixels). Image will be resized to (size, size).
+        dtype: Desired JAX array dtype (default: jnp.float32).
+
+    Returns:
+        A (size, size) JAX array with values in [0, 1].
+    """
+    # open, convert to single‐channel, resize with nearest‐neighbor
+    img = (
+        Image.open(path)
+        .convert("L")
+        .resize((size, size), Image.NEAREST)
+    )
+    # turn into jax array and scale to [0,1]
+    return jnp.array(img, dtype=dtype) / 255.0

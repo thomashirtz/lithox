@@ -1,24 +1,16 @@
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
-
+import jax.numpy as jnp
 import lithox as ltx
-from lithox.paths import PACKAGE_DIRECTORY
+from lithox.paths import DATA_DIRECTORY
 
 if __name__ == '__main__':
 
     # Configuration
-    mask_path = PACKAGE_DIRECTORY.parent / "data" / 'mask.png'
+    mask_path = DATA_DIRECTORY / 'mask.png'
     image_size = 1024
 
     # Load and preprocess the mask image
-    raw_mask = (
-        Image.open(mask_path)
-        .convert("L")
-        .resize((image_size, image_size), Image.NEAREST)
-    )
-    mask = jnp.array(raw_mask, dtype=np.float32) / 255.0
+    mask = ltx.load_image(mask_path, image_size)
 
     # Instantiate process-variation simulator
     simulator = ltx.ProcessVariationSimulator()

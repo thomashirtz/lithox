@@ -8,4 +8,5 @@ CURRENT_FILE_PATH = Path(__file__).resolve()
 PACKAGE_DIRECTORY = CURRENT_FILE_PATH.parent
 KERNELS_DIRECTORY = PACKAGE_DIRECTORY / "kernels"
 SCALES_DIRECTORY = PACKAGE_DIRECTORY / "scales"
+DATA_DIRECTORY = PACKAGE_DIRECTORY.parent / "data"
 # todo checkout importlib.resources
