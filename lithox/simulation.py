@@ -11,7 +11,7 @@ from chex import dataclass
 
 from lithox.defaults import DOSE, RESIST_STEEPNESS, RESIST_THRESHOLD, PRINT_THRESHOLD, DTYPE, DOSE_MAX, DOSE_MIN, DOSE_NOMINAL
 from lithox.paths import SCALES_DIRECTORY, KERNELS_DIRECTORY
-from lithox.utilities import center_pad_2d, centered_fft_2d, centered_ifft_2d, _load_npy
+from lithox.utilities import center_pad_2d, centered_fft_2d, centered_ifft_2d, load_npy
 
 
 @dataclass
@@ -44,13 +44,10 @@ class LithographySimulator(eqx.Module):
             dtype: jnp.dtype = DTYPE,
     ):
         self.kernel_type: str = kernel_type
-        kernels_path: Path = KERNELS_DIRECTORY / f"{kernel_type}.npy"
-        kernels_ct_path: Path = KERNELS_DIRECTORY / f"{kernel_type}_ct.npy"
-        scales_path: Path = SCALES_DIRECTORY / f"{kernel_type}.npy"
 
-        self.kernels =  _load_npy(package="lithox.kernels", filename=f"{kernel_type}.npy")
-        self.kernels_ct =  _load_npy(package="lithox.kernels", filename=f"{kernel_type}_ct.npy")
-        self.scales = _load_npy(package="lithox.scales", filename=f"{kernel_type}.npy")
+        self.kernels =  load_npy(module="lithox.kernels", filename=f"{kernel_type}.npy")
+        self.kernels_ct =  load_npy(module="lithox.kernels", filename=f"{kernel_type}_ct.npy")
+        self.scales = load_npy(module="lithox.scales", filename=f"{kernel_type}.npy")
 
         self.dose = dose
         self.resist_threshold = resist_threshold

@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
+from importlib import resources
 from pathlib import Path
 from typing import Union
 
@@ -104,8 +105,21 @@ def load_image(
     # turn into jax array and scale to [0,1]
     return jnp.array(img, dtype=dtype) / 255.0
 
-def _load_npy(package: str, filename: str) -> jnp.ndarray:
-    from importlib import resources
-    file = resources.files(package) / filename
-    with resources.as_file(file) as p:
-        return jnp.load(p)
+def load_npy(module: str, filename: str) -> jnp.ndarray:
+    """
+    Try to load `filename` from the installed `package` via importlib.resources.
+    If that fails (not installed, zipped, or missing resource), fall back
+    to a file-system lookup relative to this module.
+    """
+    try:
+        # zip-safe: works if package is installed as wheel/egg/zipapp
+        pkg_files = resources.files(module)
+        resource_path = pkg_files / filename
+        with resources.as_file(resource_path) as p:
+            return jnp.load(p)
+    except (ModuleNotFoundError, FileNotFoundError):
+        # fallback: assume code is laid out on disk
+        package_directory = Path(__file__).resolve().parent
+        module = module.partition(".")[2]
+        path = package_directory / module / filename
+        return jnp.load(path)
