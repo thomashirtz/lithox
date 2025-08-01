@@ -103,3 +103,9 @@ def load_image(
     )
     # turn into jax array and scale to [0,1]
     return jnp.array(img, dtype=dtype) / 255.0
+
+def _load_npy(package: str, filename: str) -> jnp.ndarray:
+    from importlib import resources
+    file = resources.files(package) / filename
+    with resources.as_file(file) as p:
+        return jnp.load(p)
