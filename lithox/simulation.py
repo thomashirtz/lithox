@@ -45,9 +45,9 @@ class LithographySimulator(eqx.Module):
     ):
         self.kernel_type: str = kernel_type
 
-        self.kernels =  load_npy(module="lithox.kernels", filename=f"{kernel_type}.npy")
-        self.kernels_ct =  load_npy(module="lithox.kernels", filename=f"{kernel_type}_ct.npy")
-        self.scales = load_npy(module="lithox.scales", filename=f"{kernel_type}.npy")
+        self.kernels =  load_npy(module="lithox.kernels", path=KERNELS_DIRECTORY, filename=f"{kernel_type}.npy")
+        self.kernels_ct =  load_npy(module="lithox.kernels", path=KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
+        self.scales = load_npy(module="lithox.scales", path=SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
 
         self.dose = dose
         self.resist_threshold = resist_threshold

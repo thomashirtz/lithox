@@ -89,5 +89,5 @@ class ProcessVariationSimulator(eqx.Module):
         simulation = self(mask)
         printed_min, printed_max = simulation.printed.min, simulation.printed.max
         # Peak-to-valley: fraction of pixels that change
-        pvb_map = (printed_max - printed_min).astype(jnp.float32)
-        return pvb_map.mean(axis=(-2, -1))
+        pvb = (printed_max - printed_min).astype(jnp.float32)
+        return pvb.mean(axis=(-2, -1))

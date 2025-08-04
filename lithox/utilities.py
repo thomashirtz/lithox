@@ -3,7 +3,6 @@
 
 from importlib import resources
 from pathlib import Path
-from typing import Union
 
 import jax.numpy as jnp
 from PIL import Image
@@ -81,7 +80,7 @@ def center_pad_2d(arr: jnp.ndarray, out_shape: tuple[int, int]) -> jnp.ndarray:
 
 
 def load_image(
-    path: Union[str, Path],
+    path: str | Path,
     size: int,
     dtype: jnp.dtype = jnp.float32,
 ) -> jnp.ndarray:
@@ -105,21 +104,48 @@ def load_image(
     # turn into jax array and scale to [0,1]
     return jnp.array(img, dtype=dtype) / 255.0
 
-def load_npy(module: str, filename: str) -> jnp.ndarray:
+
+def load_npy(
+    filename: str,
+    module: str | None = None,
+    path: Path | None = None
+) -> jnp.ndarray:
+    """Load a .npy file via importlib.resources with an optional filesystem fallback.
+
+    Attempts to load `filename` from the given Python package `module`
+    using `importlib.resources` (works even in zipped installs). If that
+    fails and `path` is provided, loads from the filesystem at `path/filename`.
+
+    Args:
+        filename: Name of the .npy file to load (e.g. "focus.npy").
+        module: Dot-separated module/package name to load from. If `None`,
+            importlib loading is skipped.
+        path: Directory on the filesystem to load the file from. If `None`,
+            filesystem loading is skipped.
+
+    Returns:
+        A JAX ndarray containing the data from the .npy file.
     """
-    Try to load `filename` from the installed `package` via importlib.resources.
-    If that fails (not installed, zipped, or missing resource), fall back
-    to a file-system lookup relative to this module.
-    """
-    try:
-        # zip-safe: works if package is installed as wheel/egg/zipapp
-        pkg_files = resources.files(module)
-        resource_path = pkg_files / filename
-        with resources.as_file(resource_path) as p:
-            return jnp.load(p)
-    except (ModuleNotFoundError, FileNotFoundError):
-        # fallback: assume code is laid out on disk
-        package_directory = Path(__file__).resolve().parent
-        module = module.partition(".")[2]
-        path = package_directory / module / filename
-        return jnp.load(path)
+    if not module and not path:
+        raise ValueError("At least one of `module` or `path` must be provided.")
+
+    # 1. Try loading from the package resource first.
+    if module:
+        try:
+            pkg_files = resources.files(module)
+            resource = pkg_files / filename
+            with resources.as_file(resource) as file_path:
+                return jnp.load(file_path)
+        except (ModuleNotFoundError, FileNotFoundError) as e:
+            if not path:
+                raise FileNotFoundError(
+                    f"Could not load '{filename}' from module '{module}' and no fallback path was provided."
+                ) from e
+
+    # 2. Fallback to filesystem (or primary if module was not provided).
+    if path:
+        try:
+            fs_path = path / filename
+            return jnp.load(fs_path)
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Failed to load file from filesystem path: {fs_path}") from e
