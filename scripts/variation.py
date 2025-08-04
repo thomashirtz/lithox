@@ -1,7 +1,15 @@
-import matplotlib.pyplot as plt
+import warnings
+
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+
 import lithox as ltx
 from lithox.paths import DATA_DIRECTORY
+
+warnings.filterwarnings(
+    "ignore",
+    message="A JAX array is being set as static!.*"
+)
 
 if __name__ == '__main__':
 
