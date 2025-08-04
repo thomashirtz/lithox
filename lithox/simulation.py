@@ -22,16 +22,16 @@ class SimulationOutput:
 
 
 class LithographySimulator(eqx.Module):
-    kernels: jnp.ndarray
-    kernels_ct: jnp.ndarray
-    scales: jnp.ndarray
-
     kernel_type: str
     dose: float
     resist_threshold: float
     resist_steepness: float
     print_threshold: float
     dtype: jnp.dtype
+
+    kernels: jnp.ndarray = eqx.static_field()
+    kernels_ct: jnp.ndarray = eqx.static_field()
+    scales: jnp.ndarray = eqx.static_field()
 
     def __init__(
             self,
