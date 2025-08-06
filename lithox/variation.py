@@ -1,13 +1,13 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
-from chex import dataclass
-
 import equinox as eqx
 import jax.numpy as jnp
+from chex import dataclass
 
+import lithox.defaults as d
 from lithox.simulation import LithographySimulator
-from lithox.defaults import DOSE_NOMINAL, RESIST_STEEPNESS, RESIST_THRESHOLD, PRINT_THRESHOLD, DTYPE, DOSE_MAX, DOSE_MIN
+
 
 @dataclass
 class Variants:
@@ -33,13 +33,13 @@ class ProcessVariationSimulator(eqx.Module):
 
     def __init__(
         self,
-        dose_nominal: float = DOSE_NOMINAL,
-        dose_min: float = DOSE_MIN,
-        dose_max: float = DOSE_MAX,
-        resist_threshold: float = RESIST_THRESHOLD,
-        resist_steepness: float = RESIST_STEEPNESS,
-        print_threshold: float = PRINT_THRESHOLD,
-        dtype: jnp.dtype = DTYPE,
+        dose_nominal: float = d.DOSE_NOMINAL,
+        dose_min: float = d.DOSE_MIN,
+        dose_max: float = d.DOSE_MAX,
+        resist_threshold: float = d.RESIST_THRESHOLD,
+        resist_steepness: float = d.RESIST_STEEPNESS,
+        print_threshold: float = d.PRINT_THRESHOLD,
+        dtype: jnp.dtype = d.DTYPE,
     ):
         # Nominal-dose simulator (in-focus)
         self.nominal_simulator = LithographySimulator(

@@ -1,7 +1,6 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
-from pathlib import Path
 from typing import Literal
 
 import equinox as eqx
@@ -9,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from chex import dataclass
 
-from lithox.defaults import DOSE, RESIST_STEEPNESS, RESIST_THRESHOLD, PRINT_THRESHOLD, DTYPE, DOSE_MAX, DOSE_MIN, DOSE_NOMINAL
+import lithox.defaults as d
 from lithox.paths import SCALES_DIRECTORY, KERNELS_DIRECTORY
 from lithox.utilities import center_pad_2d, centered_fft_2d, centered_ifft_2d, load_npy
 
@@ -38,11 +37,11 @@ class LithographySimulator(eqx.Module):
             self,
             kernel_type: Literal["focus", "defocus"] = "focus",
             *,
-            dose: float = DOSE,
-            resist_threshold: float = RESIST_THRESHOLD,
-            resist_steepness: float = RESIST_STEEPNESS,
-            print_threshold: float = PRINT_THRESHOLD,
-            dtype: jnp.dtype = DTYPE,
+            dose: float = d.DOSE,
+            resist_threshold: float = d.RESIST_THRESHOLD,
+            resist_steepness: float = d.RESIST_STEEPNESS,
+            print_threshold: float = d.PRINT_THRESHOLD,
+            dtype: jnp.dtype = d.DTYPE,
     ):
         self.kernel_type: str = kernel_type
 
@@ -85,15 +84,15 @@ class LithographySimulator(eqx.Module):
 
     @classmethod
     def nominal(cls, **overrides) -> "LithographySimulator":
-        return cls(kernel_type="focus", dose=DOSE_NOMINAL, **overrides)
+        return cls(kernel_type="focus", dose=d.DOSE_NOMINAL, **overrides)
 
     @classmethod
     def maximum(cls,**overrides) -> "LithographySimulator":
-        return cls(kernel_type="focus", dose=DOSE_MAX, **overrides)
+        return cls(kernel_type="focus", dose=d.DOSE_MAX, **overrides)
 
     @classmethod
     def minimum(cls, **overrides) -> "LithographySimulator":
-        return cls(kernel_type="defocus", dose=DOSE_MIN, **overrides)
+        return cls(kernel_type="defocus", dose=d.DOSE_MIN, **overrides)
 
 
 def convolve_frequency_domain(
