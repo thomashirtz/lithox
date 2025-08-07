@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from chex import dataclass
 
 import lithox.defaults as d
-from lithox.paths import SCALES_DIRECTORY, KERNELS_DIRECTORY
+import lithox.paths as p
 from lithox.utilities import center_pad_2d, centered_fft_2d, centered_ifft_2d, load_npy
 
 
@@ -45,9 +45,9 @@ class LithographySimulator(eqx.Module):
     ):
         self.kernel_type: str = kernel_type
 
-        self.kernels =  load_npy(module="lithox.kernels", path=KERNELS_DIRECTORY, filename=f"{kernel_type}.npy")
-        self.kernels_ct =  load_npy(module="lithox.kernels", path=KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
-        self.scales = load_npy(module="lithox.scales", path=SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
+        self.kernels =  load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}.npy")
+        self.kernels_ct =  load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
+        self.scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
 
         self.dose = dose
         self.resist_threshold = resist_threshold
