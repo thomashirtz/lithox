@@ -14,10 +14,12 @@ if __name__ == '__main__':
 
     # Configuration
     mask_path = DATA_DIRECTORY / 'mask.png'
+    target_path = DATA_DIRECTORY / 'target.png'
     image_size = 1024
 
     # Load and preprocess the mask image
     mask = ltx.load_image(mask_path, image_size)
+    target = ltx.load_image(target_path, image_size)
 
     # Run the lithography simulation
     print("Running lithography simulation...")
@@ -27,16 +29,17 @@ if __name__ == '__main__':
 
     # Map titles to their corresponding image data
     title_to_data = {
-        "Original Mask": mask,
-        "Aerial Image": simulation_result.aerial,
-        "Resist Image": simulation_result.resist,
-        "Printed Image": simulation_result.printed,
+        "Target": target,
+        "Original mask": mask,
+        "Aerial image": simulation_result.aerial,
+        # "Resist Image": simulation_result.resist,
+        "Printed image": simulation_result.printed,
     }
 
     # Plot the results in a 2×2 grid
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(7, 6.5), dpi=200)
     for ax, (title, data) in zip(axes.flatten(), title_to_data.items()):
-        plot = ax.imshow(data, cmap="gray")
+        plot = ax.imshow(data, cmap="magma")
         ax.set_title(title)
         fig.colorbar(
             plot,
@@ -45,6 +48,8 @@ if __name__ == '__main__':
             fraction=0.046,
             pad=0.04,
         )
+        ax.set_axis_off()
 
     plt.tight_layout()
+    # plt.savefig('simulation.png', dpi=200)
     plt.show()

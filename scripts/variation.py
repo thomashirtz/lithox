@@ -36,7 +36,7 @@ if __name__ == '__main__':
     class_map = (prt_max + prt_min).astype(jnp.int32)
 
     # Plot mask and PVB classes side by side
-    fig, axes = plt.subplots(1, 2, figsize=(9.1, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(7, 3.04), dpi=200)
 
     axes[0].imshow(mask, cmap="gray")
     axes[0].set_title("Mask")
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     norm = BoundaryNorm([0, 1, 2, 3], cmap.N)
 
     im = axes[1].imshow(class_map, cmap=cmap, norm=norm, interpolation="nearest")
-    axes[1].set_title("Process Variation")
+    axes[1].set_title("Process variation")
     axes[1].axis("off")
 
     # Add colorbar with class labels
@@ -56,6 +56,7 @@ if __name__ == '__main__':
     # cbar.set_label("Classes", rotation=90, labelpad=6)
 
     plt.tight_layout()
+    # plt.savefig('variation.png', dpi=200)
     plt.show()
 
     # Print fraction summary
