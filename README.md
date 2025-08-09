@@ -19,10 +19,10 @@ $$
 where $M$ is the mask, $h_k$ are coherent-mode PSFs, and $s_k\ge 0$ are the corresponding weights. In practice this is evaluated in the Fourier domain:
 
 $$
-I=\sum_{k} s_k \left| \mathcal{F}^{-1} \left(\mathcal{F}\{\mathrm{dose}\cdot M\}\cdot H_k\right)\right|^{2},
+I=\sum_{k} s_k \left| \mathcal{F}^{-1} \left(\mathcal{F}\\{\mathrm{dose}\cdot M\\}\cdot H_k\right)\right|^{2},
 $$
 
-with $H_k=\mathcal{F}\{h_k\}$.
+with $H_k=\mathcal{F}\\{h_k\\}$.
 
 A simple resist and print model maps the aerial image to binary output:
 
@@ -31,7 +31,7 @@ R = \sigma \big(\alpha (I-\tau_{\mathrm{resist}})\big),\qquad
 P = \mathbf{1} \left[R>\tau_{\mathrm{print}}\right].
 $$
 
-**Notation (all defined):**
+**Notations :**
 
 * $x,y$: image-plane spatial coordinates.
 * $M\in[0,1]^{H\times W}$: mask transmission (loaded image, optionally resized).
@@ -43,7 +43,7 @@ $$
 * $I\in\mathbb{R}_+^{H\times W}$: aerial image (intensity).
 * $\sigma(\cdot)$: logistic sigmoid; $\alpha>0$ is its steepness.
 * $\tau_{\mathrm{resist}}$: threshold shifting the sigmoid; $R\in(0,1)^{H\times W}$ is the “resist” image.
-* $\tau_{\mathrm{print}}$: binarization threshold; $P\in\{0,1\}^{H\times W}$ is the final printed pattern.
+* $\tau_{\mathrm{print}}$: binarization threshold; $P\in\\{0,1\\}^{H\times W}$ is the final printed pattern.
 
 Gradients are supported via a custom VJP for the aerial step, enabling end-to-end autodiff through $I\rightarrow R\rightarrow P$ (with a straight-through style threshold in practice).
 
