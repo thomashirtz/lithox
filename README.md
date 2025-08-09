@@ -76,7 +76,7 @@ output = simulator(mask)
   <img src="./scripts/simulation.png" alt="scripts/simulation.png" width="500"/>
 </p>
 <p align="center">
-  <em>Example simulation output from <code><a href="./scripts/simulation.py">./scripts/simulation.py</a></code></em>
+  <em>Example of simulation output generated with the script <code><a href="./scripts/simulation.py">./scripts/simulation.py</a></code></em>
 </p>
 
 ## Process variation
@@ -112,22 +112,22 @@ $$
 
 ```python
 pvb_mean = pvs.get_pvb(mask)  # scalar in [0,1]
-print(float(pvb_mean))        # e.g., 0.07 means 7% of pixels are unstable
+print(float(pvb_mean))  # e.g., 0.07 means 7% of pixels are unstable
 ```
 
-If you also want the *map* of unstable pixels (0/1 per pixel), you can derive it from `pv_out`:
+If you also want the *map* of unstable pixels (0/1 per pixel), you can derive it from `pv_output`:
 
 ```python
 import jax.numpy as jnp
 
-unstable_map = (pv_out.printed.max - pv_out.printed.min).astype(jnp.float32)  # [H, W]
+pv_map = (pv_output.printed.max - pv_output.printed.min).astype(jnp.float32)  # [H, W]
 ```
 
 <p align="center">
   <img src="./scripts/variation.png" alt="scripts/variation.png" width="500"/>
 </p>
 <p align="center">
-  <em>Example PVB computed with <code><a href="./scripts/variation.py">./scripts/variation.py</a></code></em>
+  <em>Example of process variation band computed using the script <code><a href="./scripts/variation.py">./scripts/variation.py</a></code></em>
 </p>
 
 ## Citation
