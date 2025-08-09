@@ -64,7 +64,7 @@ output = simulator(mask)
 
 * `output.aerial: jnp.ndarray` — continuous aerial intensity $I$ (float32, shape `[H, W]`).
 * `output.resist: jnp.ndarray` — sigmoid-mapped resist image $R\in(0,1)$ (float32, `[H, W]`).
-* `output.printed: jnp.ndarray` — binary print $P\in\{0,1\}$ (float32, `[H, W]`).
+* `output.printed: jnp.ndarray` — binary print $P\in\\{0,1\\}$ (float32, `[H, W]`).
 
 `LithographySimulator` variants (identical API, different conditions):
 
