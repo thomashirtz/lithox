@@ -13,13 +13,13 @@ pip install git+https://github.com/thomashirtz/lithox#egg=lithox
 lithox models partially coherent imaging via the Hopkins formulation with a coherent-mode decomposition. The aerial image is
 
 $$
-I(x,y)=\sum_{k} s_k\,\left|\big(h_k * (\mathrm{dose}\cdot M)\big)(x,y)\right|^{2},
+I(x,y)=\sum_{k} s_k \left|\big(h_k * (\mathrm{dose}\cdot M)\big)(x, y)\right|^{2},
 $$
 
 where $M$ is the mask, $h_k$ are coherent-mode PSFs, and $s_k\ge 0$ are the corresponding weights. In practice this is evaluated in the Fourier domain:
 
 $$
-I=\sum_{k} s_k\,\left|\;\mathcal{F}^{-1}\!\left(\mathcal{F}\{\mathrm{dose}\cdot M\}\cdot H_k\right)\right|^{2},
+I=\sum_{k} s_k \left| \mathcal{F}^{-1} \left(\mathcal{F}\{\mathrm{dose}\cdot M\}\cdot H_k\right)\right|^{2},
 $$
 
 with $H_k=\mathcal{F}\{h_k\}$.
@@ -27,8 +27,8 @@ with $H_k=\mathcal{F}\{h_k\}$.
 A simple resist and print model maps the aerial image to binary output:
 
 $$
-R=\sigma\!\big(\alpha\,(I-\tau_{\mathrm{resist}})\big),\qquad
-P=\mathbf{1}\!\left[R>\tau_{\mathrm{print}}\right].
+R = \sigma \big(\alpha (I-\tau_{\mathrm{resist}})\big),\qquad
+P = \mathbf{1} \left[R>\tau_{\mathrm{print}}\right].
 $$
 
 **Notation (all defined):**
