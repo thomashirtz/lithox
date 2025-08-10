@@ -1,4 +1,4 @@
-# 🔬 lithox
+# 🔬 `lithox`
 
 High-performance JAX-based photolithography simulation.
 
@@ -10,7 +10,7 @@ pip install git+https://github.com/thomashirtz/lithox#egg=lithox
 
 ## Theory
 
-lithox models partially coherent imaging via the Hopkins formulation with a coherent-mode decomposition. The aerial image is
+`lithox` models partially coherent imaging via the Hopkins formulation with a coherent-mode decomposition. The formula used to compute the aerial image is:
 
 $$
 I(x,y)=\sum_{k} s_k \left|\big(h_k * (\mathrm{dose}\cdot M)\big)(x, y)\right|^{2},
@@ -34,7 +34,7 @@ $$
 **Notations :**
 
 * $x,y$: image-plane spatial coordinates.
-* $M\in[0,1]^{H\times W}$: mask transmission (loaded image, optionally resized).
+* $M\in[0,1]^{H\times W}$: mask transmission.
 * $\mathrm{dose}\in\mathbb{R}_+$: exposure dose scalar applied to the mask.
 * $h_k$: $k$-th coherent-mode point spread function (PSF).
 * $H_k$: Fourier transform of $h_k$.
@@ -60,7 +60,7 @@ simulator = ltx.LithographySimulator()
 output = simulator(mask)
 ```
 
-**What `out` contains**
+**What does `output` contain ?**
 
 * `output.aerial: jnp.ndarray` — continuous aerial intensity $I$ (float32, shape `[H, W]`).
 * `output.resist: jnp.ndarray` — sigmoid-mapped resist image $R\in(0,1)$ (float32, `[H, W]`).
