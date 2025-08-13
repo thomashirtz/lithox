@@ -125,7 +125,7 @@ def load_npy(
             filesystem loading is skipped.
 
     Returns:
-        A JAX ndarray containing the data from the .npy file.
+        A JAX Array containing the data from the .npy file.
     """
     if not module and not path:
         raise ValueError("At least one of `module` or `path` must be provided.")

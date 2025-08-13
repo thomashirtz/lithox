@@ -51,15 +51,17 @@ Gradients are supported via a custom VJP for the aerial step, enabling end-to-en
 
 ## Simulation
 
+Getting started:
+
 ```python
 import lithox as ltx
+import matplotlib.pyplot as plt
 
 mask = ltx.load_image("./data/mask.png", size=1024) # Update the path if necessary
 
 simulator = ltx.LithographySimulator()
 output = simulator(mask)
 
-import matplotlib.pyplot as plt
 plt.imshow(output.printed)
 plt.show()
 ```
@@ -82,6 +84,37 @@ plt.show()
 <p align="center">
   <em>Example of simulation output generated with the script <code><a href="./scripts/simulation.py">./scripts/simulation.py</a></code></em>
 </p>
+
+<details>
+ 
+<summary>More detailed example:</summary>
+ 
+```python
+import lithox as ltx
+import matplotlib.pyplot as plt
+
+mask = ltx.load_image("./data/mask.png", size=1024) # Update the path if necessary
+
+simulator = ltx.LithographySimulator()
+output = simulator(mask)
+
+title_to_data = {
+    "Mask": mask,
+    "Aerial image": output.aerial,
+    "Resist image": output.resist,
+    "Printed image": output.printed,
+}
+
+fig, axes = plt.subplots(2, 2, constrained_layout=True)
+for ax, (title, data) in zip(axes.flat, title_to_data.items()):
+    ax.imshow(data, cmap="gray")
+    ax.set_title(title, pad=2)
+    ax.axis("off")
+
+plt.show()
+```
+ 
+</details>
 
 ## Process variation
 
