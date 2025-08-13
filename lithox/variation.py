@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 from chex import dataclass
 
@@ -11,9 +12,9 @@ from lithox.simulation import LithographySimulator
 
 @dataclass
 class Variants:
-    nominal: jnp.ndarray
-    max: jnp.ndarray
-    min: jnp.ndarray
+    nominal: jax.Array
+    max: jax.Array
+    min: jax.Array
 
 @dataclass
 class ProcessVariationOutput:
@@ -71,7 +72,7 @@ class ProcessVariationSimulator(eqx.Module):
             dtype=dtype,
         )
 
-    def __call__(self, mask: jnp.ndarray) -> ProcessVariationOutput:
+    def __call__(self, mask: jax.Array) -> ProcessVariationOutput:
         out_nom = self.nominal_simulator(mask)
         out_max = self.max_simulator(mask)
         out_min = self.min_simulator(mask)
@@ -84,8 +85,8 @@ class ProcessVariationSimulator(eqx.Module):
 
     def get_pvb(
         self,
-        mask: jnp.ndarray,
-    ) -> jnp.ndarray:
+        mask: jax.Array,
+    ) -> jax.Array:
         simulation = self(mask)
         printed_min, printed_max = simulation.printed.min, simulation.printed.max
         # Peak-to-valley: fraction of pixels that change

@@ -15,9 +15,9 @@ from lithox.utilities import center_pad_2d, centered_fft_2d, centered_ifft_2d, l
 
 @dataclass
 class SimulationOutput:
-    aerial: jnp.ndarray
-    resist: jnp.ndarray
-    printed: jnp.ndarray
+    aerial: jax.Array
+    resist: jax.Array
+    printed: jax.Array
 
 
 class LithographySimulator(eqx.Module):
@@ -29,9 +29,9 @@ class LithographySimulator(eqx.Module):
     kernel_type: str = eqx.field(static=True)
     dtype: jnp.dtype = eqx.field(static=True)
 
-    kernels: jnp.ndarray = eqx.field(static=True)
-    kernels_ct: jnp.ndarray = eqx.field(static=True)
-    scales: jnp.ndarray = eqx.field(static=True)
+    kernels: jax.Array = eqx.field(static=True)
+    kernels_ct: jax.Array = eqx.field(static=True)
+    scales: jax.Array = eqx.field(static=True)
 
     def __init__(
             self,
@@ -55,7 +55,7 @@ class LithographySimulator(eqx.Module):
         self.print_threshold = print_threshold
         self.dtype = dtype
 
-    def __call__(self, mask: jnp.ndarray) -> SimulationOutput:
+    def __call__(self, mask: jax.Array) -> SimulationOutput:
         aerial = self.simulate_aerial_from_mask(mask=mask)
         resist = self.simulate_resist_from_aerial(aerial=aerial)
         printed = self.simulate_printed_from_resist(resist=resist)
@@ -65,7 +65,7 @@ class LithographySimulator(eqx.Module):
             printed=printed,
         )
 
-    def simulate_aerial_from_mask(self, mask: jnp.ndarray) -> jnp.ndarray:
+    def simulate_aerial_from_mask(self, mask: jax.Array) -> jax.Array:
         return simulate_aerial_from_mask(
             mask=mask.astype(self.dtype),
             dose=self.dose,
@@ -74,12 +74,12 @@ class LithographySimulator(eqx.Module):
             scales=self.scales,  # [K] non-negative
         )
 
-    def simulate_resist_from_aerial(self, aerial: jnp.ndarray) -> jnp.ndarray:
+    def simulate_resist_from_aerial(self, aerial: jax.Array) -> jax.Array:
         return jax.nn.sigmoid(
             self.resist_steepness * (aerial - self.resist_threshold)
         )
 
-    def simulate_printed_from_resist(self, resist: jnp.ndarray) -> jnp.ndarray:
+    def simulate_printed_from_resist(self, resist: jax.Array) -> jax.Array:
         return (resist > self.print_threshold).astype(resist.dtype)
 
     @classmethod
@@ -87,7 +87,7 @@ class LithographySimulator(eqx.Module):
         return cls(kernel_type="focus", dose=d.DOSE_NOMINAL, **overrides)
 
     @classmethod
-    def maximum(cls,**overrides) -> "LithographySimulator":
+    def maximum(cls, **overrides) -> "LithographySimulator":
         return cls(kernel_type="focus", dose=d.DOSE_MAX, **overrides)
 
     @classmethod
@@ -96,9 +96,9 @@ class LithographySimulator(eqx.Module):
 
 
 def convolve_frequency_domain(
-    image_stack: jnp.ndarray,
-    kernels_fourier: jnp.ndarray,
-) -> jnp.ndarray:
+    image_stack: jax.Array,
+    kernels_fourier: jax.Array,
+) -> jax.Array:
     """
     Frequency-domain convolution of a stack of complex fields by a stack of Fourier kernels,
     without additional padding.
@@ -127,12 +127,12 @@ def convolve_frequency_domain(
 
 @jax.custom_vjp
 def simulate_aerial_from_mask(
-    mask: jnp.ndarray,
+    mask: jax.Array,
     dose: float,
-    kernels_fourier: jnp.ndarray,      # [K,Hk,Wk] complex
-    kernels_fourier_ct: jnp.ndarray,   # [K,Hk,Wk] complex (used in backward)
-    scales: jnp.ndarray,               # [K] ≥ 0
-) -> jnp.ndarray:
+    kernels_fourier: jax.Array,      # [K,Hk,Wk] complex
+    kernels_fourier_ct: jax.Array,   # [K,Hk,Wk] complex (used in backward)
+    scales: jax.Array,               # [K] ≥ 0
+) -> jax.Array:
     """
     Forward aerial image:
         I = sum_k scales[k] * | F^{-1}( F(dose * mask) * kernels_fourier[k] ) |^2
@@ -152,11 +152,11 @@ def simulate_aerial_from_mask(
 
 
 def simulate_aerial_from_mask_fwd(
-    mask: jnp.ndarray,
+    mask: jax.Array,
     dose: float,
-    kernels_fourier: jnp.ndarray,
-    kernels_fourier_ct: jnp.ndarray,
-    scales: jnp.ndarray,
+    kernels_fourier: jax.Array,
+    kernels_fourier_ct: jax.Array,
+    scales: jax.Array,
 ):
     # constants
     kernels_fourier = jax.lax.stop_gradient(kernels_fourier)
@@ -176,8 +176,8 @@ def simulate_aerial_from_mask_fwd(
 
 
 def simulate_aerial_from_mask_bwd(
-    residuals: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, float],
-    grad_aerial: jnp.ndarray,
+    residuals: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, float],
+    grad_aerial: jax.Array,
 ):
     dosed_mask, fields_main, kernels_fourier, kernels_fourier_ct, scales, dose = residuals
 

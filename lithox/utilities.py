@@ -4,6 +4,7 @@
 from importlib import resources
 from pathlib import Path
 
+import jax
 import jax.numpy as jnp
 from PIL import Image
 from jax import jit
@@ -11,8 +12,8 @@ from jax import jit
 
 @jit
 def centered_fft_2d(
-    data: jnp.ndarray,
-) -> jnp.ndarray:
+    data: jax.Array,
+) -> jax.Array:
     """Perform a centered 2-dimensional Fast Fourier Transform.
 
     This function shifts the zero-frequency component to the center of
@@ -22,7 +23,7 @@ def centered_fft_2d(
         data: Input array. The FFT is computed over the last two axes.
 
     Returns:
-        A jnp.ndarray of the same shape as `data`, containing the centered 2D FFT result.
+        A jax.Array of the same shape as `data`, containing the centered 2D FFT result.
     """
     data = jnp.fft.ifftshift(data, axes=(-2, -1))
     data = jnp.fft.fftn(data, axes=(-2, -1))
@@ -31,7 +32,7 @@ def centered_fft_2d(
 
 
 @jit
-def centered_ifft_2d(data: jnp.ndarray) -> jnp.ndarray:
+def centered_ifft_2d(data: jax.Array) -> jax.Array:
     """Perform a centered 2-dimensional inverse Fast Fourier Transform.
 
     This function shifts the zero-frequency component to the center of
@@ -41,7 +42,7 @@ def centered_ifft_2d(data: jnp.ndarray) -> jnp.ndarray:
         data: Input array. The inverse FFT is computed over the last two axes.
 
     Returns:
-        A jnp.ndarray of the same shape as `data`, containing the centered 2D inverse FFT result.
+        A jax.Array of the same shape as `data`, containing the centered 2D inverse FFT result.
     """
     data = jnp.fft.ifftshift(data, axes=(-2, -1))
     data = jnp.fft.ifftn(data, axes=(-2, -1))
@@ -49,7 +50,7 @@ def centered_ifft_2d(data: jnp.ndarray) -> jnp.ndarray:
     return data
 
 
-def center_pad_2d(arr: jnp.ndarray, out_shape: tuple[int, int]) -> jnp.ndarray:
+def center_pad_2d(arr: jax.Array, out_shape: tuple[int, int]) -> jax.Array:
     """
     Zero-pad the *last two* (H, W) axes of `arr` so that they match `out_shape`,
     while keeping every leading (batch) axis unchanged.
@@ -83,7 +84,7 @@ def load_image(
     path: str | Path,
     size: int,
     dtype: jnp.dtype = jnp.float32,
-) -> jnp.ndarray:
+) -> jax.Array:
     """
     Load a lithography image, convert to grayscale, resize, and normalize.
 
@@ -109,7 +110,7 @@ def load_npy(
     filename: str,
     module: str | None = None,
     path: Path | None = None
-) -> jnp.ndarray:
+) -> jax.Array:
     """Load a .npy file via importlib.resources with an optional filesystem fallback.
 
     Attempts to load `filename` from the given Python package `module`

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 
-def convert_pt_to_npy(source_path: str, output_path: str, permute: bool = False):
+def convert_pt_to_npy(source_path: str, output_path: str, permute: bool = False) -> None:
     """
     Load a .pt tensor file, permute dimensions from (H, W, C) to (C, H, W),
     and save it as a .npy file, creating the output directory if needed.
@@ -31,6 +31,7 @@ def convert_pt_to_npy(source_path: str, output_path: str, permute: bool = False)
     # Save as .npy
     np.save(output_path, array)
     print(f"Saved: {output_path}")
+
 
 if __name__ == '__main__':
     source_dir = Path('/kernels_pt')
