@@ -1,10 +1,10 @@
 import warnings
+from pathlib import Path
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import lithox as ltx
-from lithox.paths import DATA_DIRECTORY
 
 warnings.filterwarnings(
     "ignore",
@@ -14,7 +14,7 @@ warnings.filterwarnings(
 if __name__ == '__main__':
 
     # Configuration
-    mask_path = DATA_DIRECTORY / 'mask.png'
+    mask_path = Path('../data/mask.png')
     image_size = 1024
 
     # Load and preprocess the mask image
