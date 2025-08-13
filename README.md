@@ -54,17 +54,21 @@ Gradients are supported via a custom VJP for the aerial step, enabling end-to-en
 ```python
 import lithox as ltx
 
-mask = ltx.load_image("./data/mask.png", size=1024)
+mask = ltx.load_image("./data/mask.png", size=1024) # Update the path if necessary
 
 simulator = ltx.LithographySimulator()
 output = simulator(mask)
+
+import matplotlib.pyplot as plt
+plt.imshow(output.printed)
+plt.show()
 ```
 
 **What does `output` contain ?**
 
-* `output.aerial: jnp.ndarray` — continuous aerial intensity $I$ (float32, shape `[H, W]`).
-* `output.resist: jnp.ndarray` — sigmoid-mapped resist image $R\in(0,1)$ (float32, `[H, W]`).
-* `output.printed: jnp.ndarray` — binary print $P\in\\{0,1\\}$ (float32, `[H, W]`).
+* `output.aerial: jnp.Array` — continuous aerial intensity $I$ (float32, shape `[H, W]`).
+* `output.resist: jnp.Array` — sigmoid-mapped resist image $R\in(0,1)$ (float32, `[H, W]`).
+* `output.printed: jnp.Array` — binary print $P\in\\{0,1\\}$ (float32, `[H, W]`).
 
 `LithographySimulator` variants (identical API, different conditions):
 
