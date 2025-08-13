@@ -6,7 +6,7 @@ High-performance JAX-based photolithography simulation.
 
 ```bash
 pip install git+https://github.com/thomashirtz/lithox#egg=lithox
-````
+```
 
 ## Theory
 
@@ -31,7 +31,7 @@ R = \sigma \big(\alpha (I-\tau_{\mathrm{resist}})\big),\qquad
 P = \mathbf{1} \left[R>\tau_{\mathrm{print}}\right].
 $$
 
-**Notations :**
+**Notations:**
 
 * $x,y$: image-plane spatial coordinates.
 * $M\in[0,1]^{H\times W}$: mask transmission.
@@ -66,7 +66,7 @@ plt.imshow(output.printed)
 plt.show()
 ```
 
-**What does `output` contain ?**
+**What does `output` contain?**
 
 * `output.aerial: jnp.Array` — continuous aerial intensity $I$ (float32, shape `[H, W]`).
 * `output.resist: jnp.Array` — sigmoid-mapped resist image $R\in(0,1)$ (float32, `[H, W]`).
@@ -87,7 +87,7 @@ plt.show()
 
 <details>
  
-<summary>More detailed example:</summary>
+<summary>More detailed example</summary>
  
 ```python
 import lithox as ltx
