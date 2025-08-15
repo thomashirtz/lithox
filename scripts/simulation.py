@@ -1,5 +1,4 @@
 import warnings
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 
@@ -12,14 +11,12 @@ warnings.filterwarnings(
 
 if __name__ == '__main__':
 
-    # Configuration
-    mask_path = Path('../data/mask.png')
-    target_path = Path('../data/target.png')
-    image_size = 1024
-
     # Load and preprocess the mask image
-    mask = ltx.load_image(mask_path, image_size)
-    target = ltx.load_image(target_path, image_size)
+    image_size = 1024
+    mask_url = 'https://raw.githubusercontent.com/thomashirtz/lithox/refs/heads/master/data/mask.png'
+    target_url = 'https://raw.githubusercontent.com/thomashirtz/lithox/refs/heads/master/data/target.png'
+    mask = ltx.load_image(path_or_url=mask_url, size=image_size)
+    target = ltx.load_image(path_or_url=target_url, size=image_size)
 
     # Run the lithography simulation
     print("Running lithography simulation...")

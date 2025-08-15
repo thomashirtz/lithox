@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from importlib import resources
+from io import BytesIO
 from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import requests
 from PIL import Image
 from jax import jit
 
@@ -81,28 +83,33 @@ def center_pad_2d(arr: jax.Array, out_shape: tuple[int, int]) -> jax.Array:
 
 
 def load_image(
-    path: str | Path,
+    path_or_url: str | Path,
     size: int,
     dtype: jnp.dtype = jnp.float32,
 ) -> jax.Array:
     """
-    Load a lithography image, convert to grayscale, resize, and normalize.
+    Load a lithography image from a file path or URL, convert to grayscale, resize, and normalize.
 
     Args:
-        path: Path to the image file.
+        path_or_url: Path to the image file or an HTTP/HTTPS URL.
         size: Target width and height (pixels). Image will be resized to (size, size).
         dtype: Desired JAX array dtype (default: jnp.float32).
 
     Returns:
         A (size, size) JAX array with values in [0, 1].
     """
-    # open, convert to single‐channel, resize with nearest‐neighbor
-    img = (
-        Image.open(path)
-        .convert("L")
-        .resize((size, size), Image.NEAREST)
-    )
-    # turn into jax array and scale to [0,1]
+    # Check if input is a URL
+    if isinstance(path_or_url, str) and path_or_url.startswith(("http://", "https://")):
+        response = requests.get(path_or_url)
+        response.raise_for_status()
+        img = Image.open(BytesIO(response.content))
+    else:
+        img = Image.open(path_or_url)
+
+    # Convert to grayscale and resize
+    img = img.convert("L").resize((size, size), Image.NEAREST)
+
+    # Convert to JAX array and scale to [0, 1]
     return jnp.array(img, dtype=dtype) / 255.0
 
 

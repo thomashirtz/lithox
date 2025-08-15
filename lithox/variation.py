@@ -83,12 +83,10 @@ class ProcessVariationSimulator(eqx.Module):
 
         return ProcessVariationOutput(aerial=aerial, resist=resist, printed=printed)
 
-    def get_pvb(
-        self,
-        mask: jax.Array,
-    ) -> jax.Array:
+    def get_pvb_map(self, mask: jax.Array) -> jax.Array:
         simulation = self(mask)
         printed_min, printed_max = simulation.printed.min, simulation.printed.max
-        # Peak-to-valley: fraction of pixels that change
-        pvb = (printed_max - printed_min).astype(jnp.float32)
-        return pvb.mean(axis=(-2, -1))
+        return (printed_max - printed_min).astype(jnp.float32)
+
+    def get_pvb_mean(self, mask: jax.Array) -> jax.Array:
+        return self.get_pvb_map(mask).mean(axis=(-2, -1))

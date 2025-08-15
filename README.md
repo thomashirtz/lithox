@@ -139,26 +139,22 @@ P_nom, P_max, P_min = pv_output.printed.nominal, pv_output.printed.max, pv_outpu
 ```
 
 **Process-variation band (PVB)**
-A simple stability indicator is the fraction of pixels that flip across corners:
 
-$$
-\mathrm{PVB\_mean}=\frac{1}{HW}\sum_{x,y}\big(P_{\max}(x,y)-P_{\min}(x,y)\big).
-$$
-
-`get_pvb(mask)` computes exactly that mean fraction:
+A simple stability indicator is the fraction of pixels that flip across corners. Two convenience methods are available:
 
 ```python
-pvb_mean = pvs.get_pvb(mask)  # scalar in [0,1]
-print(float(pvb_mean))  # e.g., 0.07 means 7% of pixels are unstable
+# Per-pixel PVB map in [0,1], shape [H, W]
+pvb_map = pvs.get_pvb_map(mask)
+
+# Mean PVB value in [0,1], scalar
+pvb_mean = pvs.get_pvb_mean(mask)
 ```
 
-If you also want the *map* of unstable pixels (0/1 per pixel), you can derive it from `pv_output`:
+Mathematically:
 
-```python
-import jax.numpy as jnp
-
-pv_map = (pv_output.printed.max - pv_output.printed.min).astype(jnp.float32)  # [H, W]
-```
+$$
+\mathrm{PVB\_map}(x,y) = P_{\max}(x,y) - P_{\min}(x,y), \quad \mathrm{PVB\_mean} = \frac{1}{HW} \sum_{x,y} \mathrm{PVB\_map}(x,y)
+$$
 
 <p align="center">
   <img src="./scripts/variation.png" alt="scripts/variation.png" width="500"/>

@@ -1,5 +1,4 @@
 import warnings
-from pathlib import Path
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -13,12 +12,10 @@ warnings.filterwarnings(
 
 if __name__ == '__main__':
 
-    # Configuration
-    mask_path = Path('../data/mask.png')
-    image_size = 1024
-
     # Load and preprocess the mask image
-    mask = ltx.load_image(mask_path, image_size)
+    image_size = 1024
+    mask_url = 'https://raw.githubusercontent.com/thomashirtz/lithox/refs/heads/master/data/mask.png'
+    mask = ltx.load_image(path_or_url=mask_url, size=image_size)
 
     # Instantiate process-variation simulator
     simulator = ltx.ProcessVariationSimulator()
