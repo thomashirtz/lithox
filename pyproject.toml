@@ -16,9 +16,9 @@ dependencies = [
   "equinox",
   "Pillow",
   "chex",
-  "torch",
   "matplotlib",
   "requests",
+  # "torch", # Only needed for the kernel conversion, not required for simulations.
 ]
 
 [tool.setuptools]
