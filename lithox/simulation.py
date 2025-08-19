@@ -26,12 +26,14 @@ class LithographySimulator(eqx.Module):
     resist_steepness: float
     print_threshold: float
 
+    kernels: jax.Array
+    kernels_ct: jax.Array
+    scales: jax.Array
+
     kernel_type: str = eqx.field(static=True)
     dtype: jnp.dtype = eqx.field(static=True)
 
-    kernels: jax.Array = eqx.field(static=True)
-    kernels_ct: jax.Array = eqx.field(static=True)
-    scales: jax.Array = eqx.field(static=True)
+    trainable: bool = eqx.field(static=True, default=False)
 
     def __init__(
             self,
@@ -66,12 +68,21 @@ class LithographySimulator(eqx.Module):
         )
 
     def simulate_aerial_from_mask(self, mask: jax.Array) -> jax.Array:
+        kernels = self.kernels
+        kernels_ct = self.kernels_ct
+        scales = self.scales
+
+        if not self.trainable:
+            kernels = jax.lax.stop_gradient(kernels)
+            kernels_ct = jax.lax.stop_gradient(kernels_ct)
+            scales = jax.lax.stop_gradient(scales)
+
         return simulate_aerial_from_mask(
             mask=mask.astype(self.dtype),
             dose=self.dose,
-            kernels_fourier=self.kernels,  # [K,Hk,Wk] complex
-            kernels_fourier_ct=self.kernels_ct,
-            scales=self.scales,  # [K] non-negative
+            kernels_fourier=kernels,  # [K,Hk,Wk] complex
+            kernels_fourier_ct=kernels_ct,
+            scales=scales,  # [K] non-negative
         )
 
     def simulate_resist_from_aerial(self, aerial: jax.Array) -> jax.Array:
