@@ -44,6 +44,7 @@ class LithographySimulator(eqx.Module):
             resist_steepness: float = d.RESIST_STEEPNESS,
             print_threshold: float = d.PRINT_THRESHOLD,
             dtype: jnp.dtype = d.DTYPE,
+            trainable: bool = False,
     ):
         self.kernel_type: str = kernel_type
 
@@ -56,6 +57,7 @@ class LithographySimulator(eqx.Module):
         self.resist_steepness = resist_steepness
         self.print_threshold = print_threshold
         self.dtype = dtype
+        self.trainable = trainable
 
     def __call__(self, mask: jax.Array) -> SimulationOutput:
         aerial = self.simulate_aerial_from_mask(mask=mask)
