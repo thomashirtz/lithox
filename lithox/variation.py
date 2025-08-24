@@ -41,6 +41,7 @@ class ProcessVariationSimulator(eqx.Module):
         resist_steepness: float = d.RESIST_STEEPNESS,
         print_threshold: float = d.PRINT_THRESHOLD,
         dtype: jnp.dtype = d.DTYPE,
+        margin: int = 0,
     ):
         # Nominal-dose simulator (in-focus)
         self.nominal_simulator = LithographySimulator(
@@ -50,6 +51,7 @@ class ProcessVariationSimulator(eqx.Module):
             resist_steepness=resist_steepness,
             print_threshold=print_threshold,
             dtype=dtype,
+            margin=margin,
         )
 
         # High-dose simulator (in-focus, max dose)
@@ -60,6 +62,7 @@ class ProcessVariationSimulator(eqx.Module):
             resist_steepness=resist_steepness,
             print_threshold=print_threshold,
             dtype=dtype,
+            margin=margin,
         )
 
         # Low-dose/defocus simulator (min dose)
@@ -70,12 +73,13 @@ class ProcessVariationSimulator(eqx.Module):
             resist_steepness=resist_steepness,
             print_threshold=print_threshold,
             dtype=dtype,
+            margin=margin,
         )
 
-    def __call__(self, mask: jax.Array) -> ProcessVariationOutput:
-        out_nom = self.nominal_simulator(mask)
-        out_max = self.max_simulator(mask)
-        out_min = self.min_simulator(mask)
+    def __call__(self, mask: jax.Array, margin: int | None = None) -> ProcessVariationOutput:
+        out_nom = self.nominal_simulator(mask=mask, margin=margin)
+        out_max = self.max_simulator(mask=mask, margin=margin)
+        out_min = self.min_simulator(mask=mask, margin=margin)
 
         aerial = Variants(nominal=out_nom.aerial, max=out_max.aerial, min=out_min.aerial)
         resist = Variants(nominal=out_nom.resist, max=out_max.resist, min=out_min.resist)
@@ -83,10 +87,10 @@ class ProcessVariationSimulator(eqx.Module):
 
         return ProcessVariationOutput(aerial=aerial, resist=resist, printed=printed)
 
-    def get_pvb_map(self, mask: jax.Array) -> jax.Array:
-        simulation = self(mask)
+    def get_pvb_map(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+        simulation = self(mask=mask, margin=margin)
         printed_min, printed_max = simulation.printed.min, simulation.printed.max
         return (printed_max - printed_min).astype(jnp.float32)
 
-    def get_pvb_mean(self, mask: jax.Array) -> jax.Array:
-        return self.get_pvb_map(mask).mean(axis=(-2, -1))
+    def get_pvb_mean(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+        return self.get_pvb_map(mask=mask, margin=margin).mean(axis=(-2, -1))

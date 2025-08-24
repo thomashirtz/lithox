@@ -10,7 +10,7 @@ from chex import dataclass
 
 import lithox.defaults as d
 import lithox.paths as p
-from lithox.utilities import center_pad_2d, centered_fft_2d, centered_ifft_2d, load_npy
+from lithox.utilities import pad_to_shape_2d, centered_fft_2d, centered_ifft_2d, load_npy, crop_margin_2d, pad_margin_2d
 
 
 @dataclass
@@ -30,6 +30,7 @@ class LithographySimulator(eqx.Module):
     kernels_ct: jax.Array
     scales: jax.Array
 
+    margin: int = eqx.field(static=True)
     kernel_type: str = eqx.field(static=True)
     dtype: jnp.dtype = eqx.field(static=True)
 
@@ -45,6 +46,7 @@ class LithographySimulator(eqx.Module):
             print_threshold: float = d.PRINT_THRESHOLD,
             dtype: jnp.dtype = d.DTYPE,
             trainable: bool = False,
+            margin: int = 0,
     ):
         self.kernel_type: str = kernel_type
 
@@ -53,23 +55,40 @@ class LithographySimulator(eqx.Module):
         self.scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
 
         self.dose = dose
+        self.margin = margin
         self.resist_threshold = resist_threshold
         self.resist_steepness = resist_steepness
         self.print_threshold = print_threshold
         self.dtype = dtype
         self.trainable = trainable
 
-    def __call__(self, mask: jax.Array) -> SimulationOutput:
-        aerial = self.simulate_aerial_from_mask(mask=mask)
+    def __call__(self, mask: jax.Array, margin: int | None = None) -> SimulationOutput:
+        margin_to_use = self.margin if margin is None else margin
+
+        if margin_to_use > 0:
+            mask = pad_margin_2d(mask, margin_to_use)
+
+        aerial = self.simulate_aerial_from_mask(mask=mask, margin=0)
         resist = self.simulate_resist_from_aerial(aerial=aerial)
         printed = self.simulate_printed_from_resist(resist=resist)
+
+        if margin_to_use > 0:
+            aerial = crop_margin_2d(aerial, margin_to_use)
+            resist = crop_margin_2d(resist, margin_to_use)
+            printed = crop_margin_2d(printed, margin_to_use)
+
         return SimulationOutput(
             aerial=aerial,
             resist=resist,
             printed=printed,
         )
 
-    def simulate_aerial_from_mask(self, mask: jax.Array) -> jax.Array:
+    def simulate_aerial_from_mask(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+        margin_to_use = self.margin if margin is None else margin
+
+        if margin_to_use > 0:
+            mask = pad_margin_2d(mask, margin_to_use)
+
         kernels = self.kernels
         kernels_ct = self.kernels_ct
         scales = self.scales
@@ -79,13 +98,18 @@ class LithographySimulator(eqx.Module):
             kernels_ct = jax.lax.stop_gradient(kernels_ct)
             scales = jax.lax.stop_gradient(scales)
 
-        return simulate_aerial_from_mask(
+        aerial = simulate_aerial_from_mask(
             mask=mask.astype(self.dtype),
             dose=self.dose,
             kernels_fourier=kernels,  # [K,Hk,Wk] complex
             kernels_fourier_ct=kernels_ct,
             scales=scales,  # [K] non-negative
         )
+
+        if margin_to_use > 0:
+            aerial = crop_margin_2d(aerial, margin_to_use)
+
+        return aerial
 
     def simulate_resist_from_aerial(self, aerial: jax.Array) -> jax.Array:
         return jax.nn.sigmoid(
@@ -128,7 +152,7 @@ def convolve_frequency_domain(
     # spatial dimensions
     H, W = image_stack_c.shape[-2:]
     # pad kernels to image size
-    kernels_padded = center_pad_2d(kernels_fourier, (H, W))  # [K, H, W]
+    kernels_padded = pad_to_shape_2d(kernels_fourier, (H, W))  # [K, H, W]
     # FFT of input fields
     stack_ft = centered_fft_2d(image_stack_c)  # [..., K, H, W]
     # broadcast kernels

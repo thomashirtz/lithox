@@ -52,34 +52,34 @@ def centered_ifft_2d(data: jax.Array) -> jax.Array:
     return data
 
 
-def center_pad_2d(arr: jax.Array, out_shape: tuple[int, int]) -> jax.Array:
+def pad_to_shape_2d(array: jax.Array, shape: tuple[int, int]) -> jax.Array:
     """
     Zero-pad the *last two* (H, W) axes of `arr` so that they match `out_shape`,
     while keeping every leading (batch) axis unchanged.
 
     Works for shapes
-        (H, W)                  ⟶ (H_out, W_out)
-        (K, H, W)               ⟶ (K, H_out, W_out)
-        (N₁, …, Nₘ, H, W)       ⟶ (N₁, …, Nₘ, H_out, W_out)
+        (H, W)                  ⟶ (h_out, w_out)
+        (K, H, W)               ⟶ (K, h_out, w_out)
+        (N₁, …, Nₘ, H, W)       ⟶ (N₁, …, Nₘ, h_out, w_out)
     """
-    H_out, W_out = out_shape
-    *prefix, H_in, W_in = arr.shape
+    h_out, w_out = shape
+    *prefix, h_in, w_in = array.shape
 
     assert (
-        H_in <= H_out and W_in <= W_out
-    ), f"Kernel size ({H_in}×{W_in}) larger than target ({H_out}×{W_out})."
+        h_in <= h_out and w_in <= w_out
+    ), f"Kernel size ({h_in}×{w_in}) larger than target ({h_out}×{w_out})."
 
-    pad_top = (H_out - H_in) // 2
-    pad_bottom = H_out - H_in - pad_top
-    pad_left = (W_out - W_in) // 2
-    pad_right = W_out - W_in - pad_left
+    pad_top = (h_out - h_in) // 2
+    pad_bottom = h_out - h_in - pad_top
+    pad_left = (w_out - w_in) // 2
+    pad_right = w_out - w_in - pad_left
 
     pad_width = [(0, 0)] * len(prefix) + [
         (pad_top, pad_bottom),  # H axis
         (pad_left, pad_right),  # W axis
     ]
 
-    return jnp.pad(arr, pad_width, mode="constant")
+    return jnp.pad(array, pad_width, mode="constant")
 
 
 def load_image(
@@ -112,6 +112,53 @@ def load_image(
     # Convert to JAX array and scale to [0, 1]
     return jnp.array(img, dtype=dtype) / 255.0
 
+def crop_margin_2d(array: jnp.ndarray, margin: int | tuple[int, int]) -> jnp.ndarray:
+    """
+    Crops the last two dimensions of an array by a specified margin.
+
+    Args:
+        array: Array with arbitrary leading dims followed by (H, W).
+        margin: Either a single int p -> crop p pixels on all sides,
+                or a tuple (crop_h, crop_w).
+
+    Returns:
+        Cropped array with same leading dims and
+        shape[..., H - 2*crop_h, W - 2*crop_w].
+    """
+    if isinstance(margin, int):
+        crop_h = crop_w = margin
+    else:
+        crop_h, crop_w = margin
+
+    if crop_h == 0 and crop_w == 0:
+        return array
+
+    return array[..., crop_h:-crop_h, crop_w:-crop_w]
+
+def pad_margin_2d(array: jnp.ndarray, padding: int | tuple[int, int]) -> jnp.ndarray:
+    """
+    Zero-pad the last two dimensions of an array.
+
+    Args:
+        array:  Array with arbitrary leading dims followed by (H, W).
+        padding: Either a single int p -> pad p pixels on all sides,
+                 or a tuple (pad_h, pad_w).
+
+    Returns:
+        Padded array with same leading dims and
+        shape[..., H + 2*pad_h, W + 2*pad_w].
+    """
+    # Normalize padding argument
+    if isinstance(padding, int):
+        pad_h = pad_w = padding
+    else:
+        pad_h, pad_w = padding
+
+    # Build pad_width: (0,0) for leading dims, (pad_h,pad_h) & (pad_w,pad_w) for H & W
+    pad_width = [(0, 0)] * (array.ndim - 2) + [(pad_h, pad_h), (pad_w, pad_w)]
+
+    # jnp.pad keeps dtype, works with arbitrary leading shapes, and uses zero-fill by default
+    return jnp.pad(array, pad_width, mode="constant")
 
 def load_npy(
     filename: str,
