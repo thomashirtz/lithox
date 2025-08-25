@@ -9,7 +9,7 @@ import torch
 
 def convert_pt_to_npy(source_path: str, output_path: str, permute: bool = False) -> None:
     """
-    Load a .pt tensor file, permute dimensions from (H, W, C) to (C, H, W),
+    Load a .pt tensor file, permute dimensions from [H, W, C] to [C, H, W],
     and save it as a .npy file, creating the output directory if needed.
 
     Parameters:

@@ -3,7 +3,7 @@
 
 from lithox.simulation import LithographySimulator, SimulationOutput
 from lithox.variation import ProcessVariationSimulator, ProcessVariationOutput, Variants
-from lithox.utilities import load_image
+from lithox.utilities.io import load_image
 
 __all__ = [
     'LithographySimulator',
