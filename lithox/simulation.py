@@ -10,8 +10,8 @@ from chex import dataclass
 
 import lithox.defaults as d
 import lithox.paths as p
-from lithox.utilities.fourier import centered_fft_2d, centered_ifft_2d
-from lithox.utilities.padding import pad_to_shape_2d, crop_margin_2d, pad_margin_2d
+from lithox.utilities.fft import centered_fft_2d, centered_ifft_2d
+from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin_2d
 from lithox.utilities.io import load_npy
 
 
