@@ -7,12 +7,20 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from chex import dataclass
+from jax.typing import ArrayLike
 
 import lithox.defaults as d
 import lithox.paths as p
 from lithox.utilities.fft import centered_fft_2d, centered_ifft_2d
-from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin_2d
 from lithox.utilities.io import load_npy
+from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin_2d
+
+COMPUTE_REAL = jnp.float32
+COMPUTE_COMPLEX = jnp.complex64
+
+# todo
+#  - jax typing annotations for shapes (*batch H W) on inputs/outputs
+#  - ArrayLike.
 
 
 @dataclass
@@ -40,8 +48,7 @@ class LithographySimulator(eqx.Module):
     3) Printed pattern via thresholding of the resist response.
 
     The module can be configured with different kernel sets (e.g., "focus", "defocus"),
-    dose levels, thresholds, and numeric dtype. Kernels/scales are treated as constants
-    unless `trainable=True`, in which case gradients may flow through them.
+    dose levels, thresholds, and numeric dtype. Kernels/scales are treated as constants.
 
     Attributes:
       dose: Exposure dose multiplier applied to the input mask.
@@ -54,23 +61,20 @@ class LithographySimulator(eqx.Module):
       margin: Optional symmetric padding (in pixels) applied around inputs/outputs.
       kernel_type: String identifier of the kernel set ("focus" or "defocus").
       dtype: JAX dtype used for internal computations (e.g., jnp.float32).
-      trainable: If False (default), gradients are stopped through kernels and scales.
     """
 
-    dose: float
-    resist_threshold: float
-    resist_steepness: float
-    print_threshold: float
+    dose: float = eqx.field(static=True)
+    resist_threshold: float = eqx.field(static=True)
+    resist_steepness: float = eqx.field(static=True)
+    print_threshold: float = eqx.field(static=True)
 
-    kernels: jax.Array
-    kernels_ct: jax.Array
-    scales: jax.Array
+    kernels: jax.Array  # complex64
+    kernels_ct: jax.Array  # complex64
+    scales: jax.Array  # float32
 
     margin: int = eqx.field(static=True)
-    kernel_type: str = eqx.field(static=True)
     dtype: jnp.dtype = eqx.field(static=True)
-
-    trainable: bool = eqx.field(static=True, default=False)
+    kernel_type: Literal["focus", "defocus"] = eqx.field(static=True)
 
     def __init__(
             self,
@@ -81,7 +85,6 @@ class LithographySimulator(eqx.Module):
             resist_steepness: float = d.RESIST_STEEPNESS,
             print_threshold: float = d.PRINT_THRESHOLD,
             dtype: jnp.dtype = d.DTYPE,
-            trainable: bool = False,
             margin: int = 0,
     ):
         """Initialize a LithographySimulator.
@@ -96,26 +99,32 @@ class LithographySimulator(eqx.Module):
           resist_steepness: Sigmoid steepness for the resist response.
           print_threshold: Threshold applied to the resist to get a binary print.
           dtype: Numeric dtype for internal computations.
-          trainable: If True, allow gradients to flow through kernels/scales.
           margin: Symmetric padding (in pixels) applied around inputs and removed
             from outputs; useful to reduce boundary artifacts.
         """
-        self.kernel_type: str = kernel_type
 
-        # Load kernels and scales; each call returns a JAX array.
-        self.kernels =  load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}.npy")
-        self.kernels_ct =  load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
-        self.scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
 
-        self.dose = dose
         self.margin = margin
-        self.resist_threshold = resist_threshold
-        self.resist_steepness = resist_steepness
-        self.print_threshold = print_threshold
-        self.dtype = dtype
-        self.trainable = trainable
+        self.kernel_type = kernel_type
 
-    def __call__(self, mask: jax.Array, margin: int | None = None) -> SimulationOutput:
+        if dtype not in (jnp.float32, jnp.bfloat16):
+            raise ValueError(f"dtype must be float32 or bfloat16; got {dtype}.")
+        self.dtype = dtype
+
+        self.dose = float(dose)
+        self.print_threshold = float(print_threshold)
+        self.resist_threshold = float(resist_threshold)
+        self.resist_steepness = float(resist_steepness)
+
+        kernels = load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}.npy")
+        kernels_ct = load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
+        scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
+
+        self.scales = jax.lax.stop_gradient(scales).astype(dtype=COMPUTE_REAL)
+        self.kernels = jax.lax.stop_gradient(kernels).astype(dtype=COMPUTE_COMPLEX)
+        self.kernels_ct = jax.lax.stop_gradient(kernels_ct).astype(dtype=COMPUTE_COMPLEX)
+
+    def __call__(self, mask: ArrayLike, margin: int | None = None) -> SimulationOutput:
         """Run the full simulation pipeline on a mask.
 
         Steps:
@@ -134,22 +143,11 @@ class LithographySimulator(eqx.Module):
           SimulationOutput with fields (aerial, resist, printed), each matching
           the spatial size of the original `mask`.
         """
-        margin_to_use = self.margin if margin is None else margin
+        mask = jnp.asarray(mask, self.dtype)
 
-        if margin_to_use > 0:
-            # Pad to mitigate boundary effects in frequency-domain convolution.
-            mask = pad_margin_2d(mask, margin_to_use)
-
-        # Run each stage (aerial -> resist -> printed).
-        aerial = self.simulate_aerial_from_mask(mask=mask, margin=0)
+        aerial = self.simulate_aerial_from_mask(mask=mask, margin=margin)
         resist = self.simulate_resist_from_aerial(aerial=aerial)
         printed = self.simulate_printed_from_resist(resist=resist)
-
-        if margin_to_use > 0:
-            # Remove the extra border introduced for convolution stability.
-            aerial = crop_margin_2d(aerial, margin_to_use)
-            resist = crop_margin_2d(resist, margin_to_use)
-            printed = crop_margin_2d(printed, margin_to_use)
 
         return SimulationOutput(
             aerial=aerial,
@@ -172,33 +170,25 @@ class LithographySimulator(eqx.Module):
           Aerial intensity image with the same spatial size as `mask` (after any
           optional padding/cropping).
         """
-        margin_to_use = self.margin if margin is None else margin
+        if mask.ndim < 2:
+            raise TypeError("mask must have at least 2 dims with trailing H, W")
 
+        margin_to_use = self.margin if margin is None else margin
         if margin_to_use > 0:
             mask = pad_margin_2d(mask, margin_to_use)
 
-        kernels = self.kernels
-        kernels_ct = self.kernels_ct
-        scales = self.scales
-
-        if not self.trainable:
-            # Treat as constants; avoids computing/keeping grads.
-            kernels = jax.lax.stop_gradient(kernels)
-            kernels_ct = jax.lax.stop_gradient(kernels_ct)
-            scales = jax.lax.stop_gradient(scales)
-
         aerial = simulate_aerial_from_mask(
-            mask=mask.astype(self.dtype),
+            mask=mask.astype(COMPUTE_REAL),
             dose=self.dose,
-            kernels_fourier=kernels,  # [K,Hk,Wk] complex
-            kernels_fourier_ct=kernels_ct,
-            scales=scales,            # [K,] non-negative
+            kernels_fourier=self.kernels,  # [K,Hk,Wk] complex
+            kernels_fourier_ct=self.kernels_ct,
+            scales=self.scales,  # [K,] non-negative
         )
 
         if margin_to_use > 0:
             aerial = crop_margin_2d(aerial, margin_to_use)
 
-        return aerial
+        return aerial.astype(self.dtype)
 
     def simulate_resist_from_aerial(self, aerial: jax.Array) -> jax.Array:
         """Compute resist activation from the aerial intensity via a sigmoid.
@@ -209,9 +199,11 @@ class LithographySimulator(eqx.Module):
         Returns:
           Resist activation in [0, 1] with the same shape as `aerial`.
         """
-        return jax.nn.sigmoid(
-            self.resist_steepness * (aerial - self.resist_threshold)
-        )
+        aerial = aerial.astype(dtype=COMPUTE_REAL)
+        resist_steepness = jnp.asarray(self.resist_steepness, COMPUTE_REAL)
+        resist_threshold = jnp.asarray(self.resist_threshold, COMPUTE_REAL)
+        resist =  jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
+        return resist.astype(dtype=self.dtype)
 
     def simulate_printed_from_resist(self, resist: jax.Array) -> jax.Array:
         """Threshold the resist activation to obtain a binary printed result.
@@ -222,7 +214,10 @@ class LithographySimulator(eqx.Module):
         Returns:
           Binary array (0 or 1) of the same shape as `resist`.
         """
-        return (resist > self.print_threshold).astype(resist.dtype)
+        resist = resist.astype(COMPUTE_REAL)
+        print_threshold = jnp.asarray(self.print_threshold, COMPUTE_REAL)
+        printed = (resist > print_threshold)
+        return printed.astype(jnp.bool_)
 
     @classmethod
     def nominal(cls, **overrides) -> "LithographySimulator":
@@ -259,16 +254,16 @@ def convolve_frequency_domain(
       Convolved complex stack with shape [..., K, H, W].
     """
     # Ensure complex dtype for frequency-domain multiplication.
-    image_stack_c = image_stack.astype(jnp.complex64)
+    image_stack_complex = image_stack.astype(dtype=COMPUTE_COMPLEX)
 
     # Spatial dimensions of the input.
-    H, W = image_stack_c.shape[-2:]
+    height, width = image_stack_complex.shape[-2:]
 
     # Pad kernels to match input spatial size.
-    kernels_padded = pad_to_shape_2d(kernels_fourier, (H, W))  # [K, H, W]
+    kernels_padded = pad_to_shape_2d(kernels_fourier, target_shape=(height, width))  # [K, H, W]
 
     # Centered FFT of the input stack.
-    stack_ft = centered_fft_2d(image_stack_c)  # [..., K, H, W]
+    stack_ft = centered_fft_2d(image_stack_complex)  # [..., K, H, W]
 
     # Broadcast kernels across leading dimensions.
     bshape = (1,) * (stack_ft.ndim - 3) + kernels_padded.shape
@@ -301,13 +296,8 @@ def simulate_aerial_from_mask(
     Returns:
       Aerial intensity image with the same spatial size as `mask`.
     """
-    # Treat constants as stop-gradient to avoid unnecessary backprop into them.
-    kernels_fourier = jax.lax.stop_gradient(kernels_fourier)
-    kernels_fourier_ct = jax.lax.stop_gradient(kernels_fourier_ct)
-    scales = jax.lax.stop_gradient(scales)
-
     # Apply dose and ensure a stable float dtype.
-    dosed_mask = (dose * mask).astype(jnp.float32)
+    dosed_mask = jnp.asarray(dose, COMPUTE_REAL) * mask.astype(COMPUTE_REAL)
 
     # Convolve mask with all kernels in one go by expanding a kernel axis.
     fields = convolve_frequency_domain(
@@ -348,12 +338,7 @@ def simulate_aerial_from_mask_fwd(
         residuals: Tuple containing (dosed_mask, fields_main, kernels_fourier,
           kernels_fourier_ct, scales, dose).
     """
-    # Treat constants as non-differentiable for efficiency/stability.
-    kernels_fourier = jax.lax.stop_gradient(kernels_fourier)
-    kernels_fourier_ct = jax.lax.stop_gradient(kernels_fourier_ct)
-    scales = jax.lax.stop_gradient(scales)
-
-    dosed_mask = (dose * mask).astype(jnp.float32)
+    dosed_mask = jnp.asarray(dose, COMPUTE_REAL) * mask.astype(COMPUTE_REAL)
 
     # Main convolution to obtain complex fields.
     fields_main = convolve_frequency_domain(
@@ -376,9 +361,7 @@ def simulate_aerial_from_mask_bwd(
     """Backward pass (VJP) for `simulate_aerial_from_mask`.
 
     Computes the gradient w.r.t. the input mask given the gradient of the aerial
-    intensity. Gradients w.r.t. dose and kernels/scales are not propagated by
-    design (returned as None), which matches the stop-gradient behavior in the
-    forward pass unless `trainable=True` is implemented at a higher level.
+    intensity.
 
     Args:
       residuals: Tuple saved by the forward pass:
