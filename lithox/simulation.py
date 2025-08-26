@@ -1,7 +1,7 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Literal
+from typing import Final, Literal
 
 import equinox as eqx
 import jax
@@ -15,8 +15,8 @@ from lithox.utilities.fft import centered_fft_2d, centered_ifft_2d
 from lithox.utilities.io import load_npy
 from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin_2d
 
-COMPUTE_REAL = jnp.float32
-COMPUTE_COMPLEX = jnp.complex64
+DTYPE_COMPUTE_REAL: Final = jnp.float32
+DTYPE_COMPUTE_COMPLEX: Final = jnp.complex64
 
 # todo
 #  - jax typing annotations for shapes (*batch H W) on inputs/outputs
@@ -120,9 +120,9 @@ class LithographySimulator(eqx.Module):
         kernels_ct = load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
         scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
 
-        self.scales = jax.lax.stop_gradient(scales).astype(dtype=COMPUTE_REAL)
-        self.kernels = jax.lax.stop_gradient(kernels).astype(dtype=COMPUTE_COMPLEX)
-        self.kernels_ct = jax.lax.stop_gradient(kernels_ct).astype(dtype=COMPUTE_COMPLEX)
+        self.scales = jax.lax.stop_gradient(scales).astype(dtype=DTYPE_COMPUTE_REAL)
+        self.kernels = jax.lax.stop_gradient(kernels).astype(dtype=DTYPE_COMPUTE_COMPLEX)
+        self.kernels_ct = jax.lax.stop_gradient(kernels_ct).astype(dtype=DTYPE_COMPUTE_COMPLEX)
 
     def __call__(self, mask: ArrayLike, margin: int | None = None) -> SimulationOutput:
         """Run the full simulation pipeline on a mask.
@@ -178,7 +178,7 @@ class LithographySimulator(eqx.Module):
             mask = pad_margin_2d(mask, margin_to_use)
 
         aerial = simulate_aerial_from_mask(
-            mask=mask.astype(COMPUTE_REAL),
+            mask=mask.astype(DTYPE_COMPUTE_REAL),
             dose=self.dose,
             kernels_fourier=self.kernels,  # [K,Hk,Wk] complex
             kernels_fourier_ct=self.kernels_ct,
@@ -199,9 +199,9 @@ class LithographySimulator(eqx.Module):
         Returns:
           Resist activation in [0, 1] with the same shape as `aerial`.
         """
-        aerial = aerial.astype(dtype=COMPUTE_REAL)
-        resist_steepness = jnp.asarray(self.resist_steepness, COMPUTE_REAL)
-        resist_threshold = jnp.asarray(self.resist_threshold, COMPUTE_REAL)
+        aerial = aerial.astype(dtype=DTYPE_COMPUTE_REAL)
+        resist_steepness = jnp.asarray(self.resist_steepness, DTYPE_COMPUTE_REAL)
+        resist_threshold = jnp.asarray(self.resist_threshold, DTYPE_COMPUTE_REAL)
         resist =  jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
         return resist.astype(dtype=self.dtype)
 
@@ -214,8 +214,8 @@ class LithographySimulator(eqx.Module):
         Returns:
           Binary array (0 or 1) of the same shape as `resist`.
         """
-        resist = resist.astype(COMPUTE_REAL)
-        print_threshold = jnp.asarray(self.print_threshold, COMPUTE_REAL)
+        resist = resist.astype(DTYPE_COMPUTE_REAL)
+        print_threshold = jnp.asarray(self.print_threshold, DTYPE_COMPUTE_REAL)
         printed = (resist > print_threshold)
         return printed.astype(jnp.bool_)
 
@@ -254,7 +254,7 @@ def convolve_frequency_domain(
       Convolved complex stack with shape [..., K, H, W].
     """
     # Ensure complex dtype for frequency-domain multiplication.
-    image_stack_complex = image_stack.astype(dtype=COMPUTE_COMPLEX)
+    image_stack_complex = image_stack.astype(dtype=DTYPE_COMPUTE_COMPLEX)
 
     # Spatial dimensions of the input.
     height, width = image_stack_complex.shape[-2:]
@@ -297,7 +297,7 @@ def simulate_aerial_from_mask(
       Aerial intensity image with the same spatial size as `mask`.
     """
     # Apply dose and ensure a stable float dtype.
-    dosed_mask = jnp.asarray(dose, COMPUTE_REAL) * mask.astype(COMPUTE_REAL)
+    dosed_mask = jnp.asarray(dose, DTYPE_COMPUTE_REAL) * mask.astype(DTYPE_COMPUTE_REAL)
 
     # Convolve mask with all kernels in one go by expanding a kernel axis.
     fields = convolve_frequency_domain(
@@ -338,7 +338,7 @@ def simulate_aerial_from_mask_fwd(
         residuals: Tuple containing (dosed_mask, fields_main, kernels_fourier,
           kernels_fourier_ct, scales, dose).
     """
-    dosed_mask = jnp.asarray(dose, COMPUTE_REAL) * mask.astype(COMPUTE_REAL)
+    dosed_mask = jnp.asarray(dose, DTYPE_COMPUTE_REAL) * mask.astype(DTYPE_COMPUTE_REAL)
 
     # Main convolution to obtain complex fields.
     fields_main = convolve_frequency_domain(
