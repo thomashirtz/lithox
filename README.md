@@ -170,7 +170,7 @@ If you use lithox in your work—whether for research, publications, or projects
 ```bibtex
 @misc{hirtz2025lithox,
   author       = {Thomas Hirtz},
-  title        = {lithox: A JAX-based lithography simulation library},
+  title        = {lithox: A JAX-based photolithography simulation library},
   year         = {2025},
   howpublished = {\url{https://github.com/thomashirtz/lithox}},
   publisher    = {GitHub},
