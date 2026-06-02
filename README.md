@@ -24,12 +24,14 @@ $$
 
 with $H_k=\mathcal{F}\\{h_k\\}$.
 
-A simple resist and print model maps the aerial image to binary output:
+Compact resist model (MOSAIC, Neural-ILT): a **sigmoid on aerial intensity** for differentiation, and a **binary threshold on resist** for physical print:
 
 $$
-R = \sigma \big(\alpha (I-\tau_{\mathrm{resist}})\big),\qquad
-P = \mathbf{1} \left[R>\tau_{\mathrm{print}}\right].
+R = \sigma \big(\alpha (I-\tau)\big),\qquad
+P = \mathbf{1} \left[R>0.5\right].
 $$
+
+For mask optimization, use $R$ in the loss, or use straight-through binarization via `output.printed_ste`.
 
 **Notations:**
 
@@ -41,11 +43,12 @@ $$
 * $s_k\ge 0$: nonnegative weight for mode $k$ (sums the partially coherent contributions).
 * $*$: 2D convolution; $\mathcal{F}$, $\mathcal{F}^{-1}$: centered FFT and IFFT used in code.
 * $I\in\mathbb{R}_+^{H\times W}$: aerial image (intensity).
-* $\sigma(\cdot)$: logistic sigmoid; $\alpha>0$ is its steepness.
-* $\tau_{\mathrm{resist}}$: threshold shifting the sigmoid; $R\in(0,1)^{H\times W}$ is the “resist” image.
-* $\tau_{\mathrm{print}}$: binarization threshold; $P\in\\{0,1\\}^{H\times W}$ is the final printed pattern.
+* $\sigma(\cdot)$: logistic sigmoid; $\alpha>0$ is its steepness (`resist_steepness`).
+* $\tau$: intensity threshold on $I$ (`resist_threshold`, default 0.225).
+* $R\in(0,1)^{H\times W}$: resist activation (`output.resist`; papers often call this $Z$).
+* $P$: binary print (`output.printed`).
 
-Gradients are supported via a custom VJP for the aerial step, enabling end-to-end autodiff through $I\rightarrow R\rightarrow P$ (with a straight-through style threshold in practice).
+Gradients: custom VJP on the aerial step; sigmoid on $I$; optional STE on binarization (`output.printed_ste`).
 
 > The coherent-mode kernels and weights used by lithox are taken from the [lithobench](https://github.com/shelljane/lithobench) project and redistributed here for convenience.
 
@@ -69,8 +72,9 @@ plt.show()
 **What does `output` contain?**
 
 * `output.aerial: jnp.Array` — continuous aerial intensity $I$ (float32, shape `[H, W]`).
-* `output.resist: jnp.Array` — sigmoid-mapped resist image $R\in(0,1)$ (float32, `[H, W]`).
-* `output.printed: jnp.Array` — binary print $P\in\\{0,1\\}$ (float32, `[H, W]`).
+* `output.resist: jnp.Array` — resist activation $R\in(0,1)$ (float32, `[H, W]`).
+* `output.printed: jnp.Array` — hard print $P=\mathbf{1}[R>0.5]$ (float32 in `{0,1}`, `[H, W]`).
+* `output.printed_ste: jnp.Array` — same binary forward as `printed`, but gradients flow through $R$ (STE).
 
 `LithographySimulator` variants (identical API, different conditions):
 
@@ -140,21 +144,17 @@ P_nom, P_max, P_min = pv_output.printed.nominal, pv_output.printed.max, pv_outpu
 
 **Process-variation band (PVB)**
 
-A simple stability indicator is the fraction of pixels that flip across corners. Two convenience methods are available:
+* **Metric** (binary, for reporting): `get_pvb_map` / `get_pvb_mean` — $P_{\max} - P_{\min}$ on hard prints.
+* **Loss** (differentiable, for ILT): `get_pvb_loss_map` / `get_pvb_loss_mean` — $R_{\max} - R_{\min}$ on `resist`.
 
 ```python
-# Per-pixel PVB map in [0,1], shape [H, W]
+# Metric PVB (boolean geometry), values in {0, 1}
 pvb_map = pvs.get_pvb_map(mask)
-
-# Mean PVB value in [0,1], scalar
 pvb_mean = pvs.get_pvb_mean(mask)
+
+# Differentiable PVB proxy for optimization
+pvb_loss_map = pvs.get_pvb_loss_map(mask)
 ```
-
-Mathematically:
-
-$$
-\mathrm{PVB\_map}(x,y) = P_{\max}(x,y) - P_{\min}(x,y), \quad \mathrm{PVB\_mean} = \frac{1}{HW} \sum_{x,y} \mathrm{PVB\_map}(x,y)
-$$
 
 <p align="center">
   <img src="./scripts/variation.png" alt="scripts/variation.png" width="500"/>

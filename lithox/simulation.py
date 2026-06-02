@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Final, Literal
 
 import equinox as eqx
@@ -18,6 +19,9 @@ from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin
 DTYPE_COMPUTE_REAL: Final = jnp.float32
 DTYPE_COMPUTE_COMPLEX: Final = jnp.complex64
 
+# Fixed binarization cut on R. This is the standard midpoint of the sigmoid.
+TAU_B: Final = 0.5
+
 # todo
 #  - jax typing annotations for shapes (*batch H W) on inputs/outputs
 #  - ArrayLike.
@@ -27,15 +31,33 @@ DTYPE_COMPUTE_COMPLEX: Final = jnp.complex64
 class SimulationOutput:
     """Container for simulator outputs.
 
+    Notation (MOSAIC [Gao DAC'14], Neural-ILT [Jiang ICCAD'20]):
+      I — aerial intensity (`aerial`)
+      R — resist activation (`resist`); many papers denote this Z
+      P — printed pattern (`printed`) with fixed threshold τ_b=0.5 (derived)
+
     Attributes:
       aerial: Aerial intensity image as a JAX array with shape (height, width) or
         with leading batch-like dimensions.
-      resist: Continuous resist activation (0..1) after thresholding/sigmoid.
-      printed: Binary printed result (0 or 1) after applying print threshold.
+      resist: Resist activation R = σ(α(I − τ_I)) in (0, 1).
+      printed: Binary print P = 𝟙[R > τ_b] with τ_b=0.5 (computed on demand).
     """
     aerial: jax.Array
     resist: jax.Array
-    printed: jax.Array
+
+    @property
+    def printed(self) -> jax.Array:
+        """Hard print P = 𝟙[R > 0.5]."""
+        resist_f = self.resist.astype(DTYPE_COMPUTE_REAL)
+        tau_b = jnp.asarray(TAU_B, DTYPE_COMPUTE_REAL)
+        return (resist_f > tau_b).astype(self.resist.dtype)
+
+    @property
+    def printed_ste(self) -> jax.Array:
+        """Binary forward with straight-through gradients through `resist`."""
+        hard = self.printed
+        soft = self.resist.astype(hard.dtype)
+        return jax.lax.stop_gradient(hard - soft) + soft
 
 
 class LithographySimulator(eqx.Module):
@@ -52,9 +74,8 @@ class LithographySimulator(eqx.Module):
 
     Attributes:
       dose: Exposure dose multiplier applied to the input mask.
-      resist_threshold: Midpoint parameter for the resist sigmoid.
-      resist_steepness: Slope parameter for the resist sigmoid.
-      print_threshold: Threshold applied to the resist to produce the binary print.
+      resist_threshold: Intensity midpoint τ_I for the resist sigmoid (on aerial I).
+      resist_steepness: Sigmoid steepness α for the resist response.
       kernels: Fourier-domain kernels with shape [K, Hk, Wk] (complex).
       kernels_ct: Conjugate/transpose-related Fourier-domain kernels used in backward pass.
       scales: Non-negative per-kernel weights with shape [K].
@@ -66,7 +87,6 @@ class LithographySimulator(eqx.Module):
     dose: float = eqx.field(static=True)
     resist_threshold: float = eqx.field(static=True)
     resist_steepness: float = eqx.field(static=True)
-    print_threshold: float = eqx.field(static=True)
 
     kernels: jax.Array  # complex64
     kernels_ct: jax.Array  # complex64
@@ -83,7 +103,8 @@ class LithographySimulator(eqx.Module):
             dose: float = d.DOSE,
             resist_threshold: float = d.RESIST_THRESHOLD,
             resist_steepness: float = d.RESIST_STEEPNESS,
-            print_threshold: float = d.PRINT_THRESHOLD,
+            binarization_threshold: float | None = None,
+            print_threshold: float | None = None,
             dtype: jnp.dtype = d.DTYPE,
             margin: int = 0,
     ):
@@ -95,14 +116,20 @@ class LithographySimulator(eqx.Module):
         Args:
           kernel_type: Which kernel set to use ("focus" or "defocus").
           dose: Exposure dose multiplier.
-          resist_threshold: Sigmoid midpoint for the resist response.
-          resist_steepness: Sigmoid steepness for the resist response.
-          print_threshold: Threshold applied to the resist to get a binary print.
+          resist_threshold: Aerial intensity threshold τ_I (sigmoid midpoint on I).
+          resist_steepness: Sigmoid steepness α for the resist response.
+          binarization_threshold: Deprecated; τ_b is fixed to 0.5.
+          print_threshold: Deprecated; τ_b is fixed to 0.5.
           dtype: Numeric dtype for internal computations.
           margin: Symmetric padding (in pixels) applied around inputs and removed
             from outputs; useful to reduce boundary artifacts.
         """
-
+        if binarization_threshold is not None or print_threshold is not None:
+            warnings.warn(
+                "binarization_threshold/print_threshold are ignored; lithox uses a fixed τ_b=0.5.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         self.margin = margin
         self.kernel_type = kernel_type
@@ -112,7 +139,6 @@ class LithographySimulator(eqx.Module):
         self.dtype = dtype
 
         self.dose = float(dose)
-        self.print_threshold = float(print_threshold)
         self.resist_threshold = float(resist_threshold)
         self.resist_steepness = float(resist_steepness)
 
@@ -124,14 +150,18 @@ class LithographySimulator(eqx.Module):
         self.kernels = jax.lax.stop_gradient(kernels).astype(dtype=DTYPE_COMPUTE_COMPLEX)
         self.kernels_ct = jax.lax.stop_gradient(kernels_ct).astype(dtype=DTYPE_COMPUTE_COMPLEX)
 
-    def __call__(self, mask: ArrayLike, margin: int | None = None) -> SimulationOutput:
+    def __call__(
+            self,
+            mask: ArrayLike,
+            margin: int | None = None,
+    ) -> SimulationOutput:
         """Run the full simulation pipeline on a mask.
 
         Steps:
           1) Optional symmetric padding by `margin` (or `self.margin` if None).
           2) Aerial simulation.
-          3) Resist response (sigmoid).
-          4) Printed result (binary threshold).
+          3) Resist response R = σ(α(I − τ_I)).
+          4) Printed result P = 𝟙[R > 0.5].
           5) Optional cropping to remove the initial padding.
 
         Args:
@@ -147,13 +177,7 @@ class LithographySimulator(eqx.Module):
 
         aerial = self.simulate_aerial_from_mask(mask=mask, margin=margin)
         resist = self.simulate_resist_from_aerial(aerial=aerial)
-        printed = self.simulate_printed_from_resist(resist=resist)
-
-        return SimulationOutput(
-            aerial=aerial,
-            resist=resist,
-            printed=printed,
-        )
+        return SimulationOutput(aerial=aerial, resist=resist)
 
     def simulate_aerial_from_mask(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
         """Simulate aerial intensity from a mask.
@@ -191,13 +215,17 @@ class LithographySimulator(eqx.Module):
         return aerial.astype(self.dtype)
 
     def simulate_resist_from_aerial(self, aerial: jax.Array) -> jax.Array:
-        """Compute resist activation from the aerial intensity via a sigmoid.
+        """Compute resist activation R = σ(α(I − τ_I)) from aerial intensity.
+
+        Matches the compact resist model in MOSAIC and Neural-ILT (one sigmoid
+        on intensity; no separate development nonlinearity). Many ILT papers
+        write Z for this quantity.
 
         Args:
-          aerial: Aerial intensity array.
+          aerial: Aerial intensity I.
 
         Returns:
-          Resist activation in [0, 1] with the same shape as `aerial`.
+          Resist activation R in (0, 1) with the same shape as `aerial`.
         """
         aerial = aerial.astype(dtype=DTYPE_COMPUTE_REAL)
         resist_steepness = jnp.asarray(self.resist_steepness, DTYPE_COMPUTE_REAL)
@@ -205,19 +233,7 @@ class LithographySimulator(eqx.Module):
         resist =  jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
         return resist.astype(dtype=self.dtype)
 
-    def simulate_printed_from_resist(self, resist: jax.Array) -> jax.Array:
-        """Threshold the resist activation to obtain a binary printed result.
-
-        Args:
-          resist: Resist activation in [0, 1].
-
-        Returns:
-          Binary array (0 or 1) of the same shape as `resist`.
-        """
-        resist = resist.astype(DTYPE_COMPUTE_REAL)
-        print_threshold = jnp.asarray(self.print_threshold, DTYPE_COMPUTE_REAL)
-        printed = (resist > print_threshold)
-        return printed.astype(jnp.bool_)
+    # NOTE: `printed` / `printed_ste` are derived on `SimulationOutput`.
 
     @classmethod
     def nominal(cls, **overrides) -> "LithographySimulator":

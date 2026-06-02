@@ -62,7 +62,6 @@ class ProcessVariationSimulator(eqx.Module):
         dose_max: float = d.DOSE_MAX,
         resist_threshold: float = d.RESIST_THRESHOLD,
         resist_steepness: float = d.RESIST_STEEPNESS,
-        print_threshold: float = d.PRINT_THRESHOLD,
         dtype: jnp.dtype = d.DTYPE,
         margin: int = 0,
     ):
@@ -77,7 +76,6 @@ class ProcessVariationSimulator(eqx.Module):
           dose_max: Dose for the maximum-dose simulator.
           resist_threshold: Midpoint of the resist sigmoid.
           resist_steepness: Slope of the resist sigmoid.
-          print_threshold: Threshold to binarize the resist activation.
           dtype: Numeric dtype for internal computations.
           margin: Symmetric padding in pixels applied inside each simulator.
         """
@@ -87,7 +85,6 @@ class ProcessVariationSimulator(eqx.Module):
             dose=dose_nominal,
             resist_threshold=resist_threshold,
             resist_steepness=resist_steepness,
-            print_threshold=print_threshold,
             dtype=dtype,
             margin=margin,
         )
@@ -98,7 +95,6 @@ class ProcessVariationSimulator(eqx.Module):
             dose=dose_max,
             resist_threshold=resist_threshold,
             resist_steepness=resist_steepness,
-            print_threshold=print_threshold,
             dtype=dtype,
             margin=margin,
         )
@@ -109,7 +105,6 @@ class ProcessVariationSimulator(eqx.Module):
             dose=dose_min,
             resist_threshold=resist_threshold,
             resist_steepness=resist_steepness,
-            print_threshold=print_threshold,
             dtype=dtype,
             margin=margin,
         )
@@ -141,12 +136,11 @@ class ProcessVariationSimulator(eqx.Module):
         return ProcessVariationOutput(aerial=aerial, resist=resist, printed=printed)
 
     def get_pvb_map(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
-        """Compute the Process Variation Band (PVB) map on the printed layer.
+        """Metric PVB map on **binary** prints (non-differentiable).
 
-        The PVB is the per-pixel difference between the max-dose and min-dose
-        printed images: `printed_max - printed_min`. Since the printed outputs
-        are binary, the PVB map is 0 where the pixel is robust (no change) and
-        1 where it is sensitive (changes across the process window).
+        Per-pixel `printed_max - printed_min` is 0 (robust) or 1 (sensitive).
+
+        For optimization losses, use `get_pvb_loss_map` on continuous R (`resist`).
 
         Args:
           mask: Input mask array.
@@ -157,7 +151,28 @@ class ProcessVariationSimulator(eqx.Module):
         """
         simulation = self(mask=mask, margin=margin)
         printed_min, printed_max = simulation.printed.min, simulation.printed.max
-        return (printed_max - printed_min).astype(jnp.float32)
+        return (printed_max.astype(jnp.float32) - printed_min.astype(jnp.float32))
+
+    def get_pvb_loss_map(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+        """Differentiable PVB proxy: R_max − R_min (resist at max/min corners).
+
+        Matches the common ILT loss ||Z_max − Z_min||² term on soft Z (our R);
+        gradients flow through the sigmoid resist model, not boolean PV geometry.
+
+        Args:
+          mask: Input mask array.
+          margin: Optional override for the simulator margin.
+
+        Returns:
+          Float array with the same spatial size as `mask`.
+        """
+        simulation = self(mask=mask, margin=margin)
+        r_min, r_max = simulation.resist.min, simulation.resist.max
+        return (r_max - r_min).astype(jnp.float32)
+
+    def get_pvb_loss_mean(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+        """Mean of `get_pvb_loss_map` over spatial dimensions."""
+        return self.get_pvb_loss_map(mask=mask, margin=margin).mean(axis=(-2, -1))
 
     def get_pvb_mean(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
         """Return the mean Process Variation Band (PVB) over spatial dimensions.
