@@ -5,10 +5,12 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from chex import dataclass
+from jaxtyping import Array, Float
 
 import lithox.defaults as d
 from lithox.simulation import LithographySimulator
 
+Image = Float[Array, "*batch H W"]
 
 @dataclass
 class Variants:
@@ -19,9 +21,9 @@ class Variants:
       max: Value for the maximum-dose (or most aggressive) process setting.
       min: Value for the minimum-dose (or most conservative/defocused) setting.
     """
-    nominal: jax.Array
-    max: jax.Array
-    min: jax.Array
+    nominal: Image
+    max: Image
+    min: Image
 
 
 @dataclass
@@ -109,7 +111,7 @@ class ProcessVariationSimulator(eqx.Module):
             margin=margin,
         )
 
-    def __call__(self, mask: jax.Array, margin: int | None = None) -> ProcessVariationOutput:
+    def __call__(self, mask: Image, margin: int | None = None) -> ProcessVariationOutput:
         """Run all three simulators on a given mask.
 
         This evaluates the pipeline at nominal, maximum, and minimum doses and
@@ -135,7 +137,7 @@ class ProcessVariationSimulator(eqx.Module):
 
         return ProcessVariationOutput(aerial=aerial, resist=resist, printed=printed)
 
-    def get_pvb_map(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+    def get_pvb_map(self, mask: Image, margin: int | None = None) -> Image:
         """Metric PVB map on **binary** prints (non-differentiable).
 
         Per-pixel `printed_max - printed_min` is 0 (robust) or 1 (sensitive).
@@ -153,7 +155,7 @@ class ProcessVariationSimulator(eqx.Module):
         printed_min, printed_max = simulation.printed.min, simulation.printed.max
         return (printed_max.astype(jnp.float32) - printed_min.astype(jnp.float32))
 
-    def get_pvb_loss_map(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+    def get_pvb_loss_map(self, mask: Image, margin: int | None = None) -> Image:
         """Differentiable PVB proxy: R_max − R_min (resist at max/min corners).
 
         Matches the common ILT loss ||Z_max − Z_min||² term on soft Z (our R);
@@ -170,11 +172,11 @@ class ProcessVariationSimulator(eqx.Module):
         r_min, r_max = simulation.resist.min, simulation.resist.max
         return (r_max - r_min).astype(jnp.float32)
 
-    def get_pvb_loss_mean(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+    def get_pvb_loss_mean(self, mask: Image, margin: int | None = None) -> jax.Array:
         """Mean of `get_pvb_loss_map` over spatial dimensions."""
         return self.get_pvb_loss_map(mask=mask, margin=margin).mean(axis=(-2, -1))
 
-    def get_pvb_mean(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+    def get_pvb_mean(self, mask: Image, margin: int | None = None) -> jax.Array:
         """Return the mean Process Variation Band (PVB) over spatial dimensions.
 
         This summarizes sensitivity as a single scalar (or one per leading

@@ -43,7 +43,8 @@ For mask optimization, use $R$ in the loss, or use straight-through binarization
 * $s_k\ge 0$: nonnegative weight for mode $k$ (sums the partially coherent contributions).
 * $*$: 2D convolution; $\mathcal{F}$, $\mathcal{F}^{-1}$: centered FFT and IFFT used in code.
 * $I\in\mathbb{R}_+^{H\times W}$: aerial image (intensity).
-* $\sigma(\cdot)$: logistic sigmoid; $\alpha>0$ is its steepness (`resist_steepness`).
+* $\sigma(\cdot)$: logistic sigmoid.
+* $\alpha>0$: sigmoid steepness (`resist_steepness`, default 50).
 * $\tau$: intensity threshold on $I$ (`resist_threshold`, default 0.225).
 * $R\in(0,1)^{H\times W}$: resist activation (`output.resist`; papers often call this $Z$).
 * $P$: binary print (`output.printed`).

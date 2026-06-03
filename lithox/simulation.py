@@ -1,14 +1,14 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
-import warnings
-from typing import Final, Literal
+from typing import Final, Literal, TypeAlias
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from chex import dataclass
 from jax.typing import ArrayLike
+from jaxtyping import Array, Complex, Float
 
 import lithox.defaults as d
 import lithox.paths as p
@@ -19,12 +19,9 @@ from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin
 DTYPE_COMPUTE_REAL: Final = jnp.float32
 DTYPE_COMPUTE_COMPLEX: Final = jnp.complex64
 
-# Fixed binarization cut on R. This is the standard midpoint of the sigmoid.
-TAU_B: Final = 0.5
-
-# todo
-#  - jax typing annotations for shapes (*batch H W) on inputs/outputs
-#  - ArrayLike.
+Image: TypeAlias = Float[Array, "*batch H W"]
+Kernels: TypeAlias = Complex[Array, "K H W"]
+Scales: TypeAlias = Float[Array, "K"]
 
 
 @dataclass
@@ -42,18 +39,18 @@ class SimulationOutput:
       resist: Resist activation R = σ(α(I − τ_I)) in (0, 1).
       printed: Binary print P = 𝟙[R > τ_b] with τ_b=0.5 (computed on demand).
     """
-    aerial: jax.Array
-    resist: jax.Array
+    aerial: Image
+    resist: Image
 
     @property
-    def printed(self) -> jax.Array:
-        """Hard print P = 𝟙[R > 0.5]."""
+    def printed(self) -> Image:
+        """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD]."""
         resist_f = self.resist.astype(DTYPE_COMPUTE_REAL)
-        tau_b = jnp.asarray(TAU_B, DTYPE_COMPUTE_REAL)
+        tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
         return (resist_f > tau_b).astype(self.resist.dtype)
 
     @property
-    def printed_ste(self) -> jax.Array:
+    def printed_ste(self) -> Image:
         """Binary forward with straight-through gradients through `resist`."""
         hard = self.printed
         soft = self.resist.astype(hard.dtype)
@@ -88,9 +85,9 @@ class LithographySimulator(eqx.Module):
     resist_threshold: float = eqx.field(static=True)
     resist_steepness: float = eqx.field(static=True)
 
-    kernels: jax.Array  # complex64
-    kernels_ct: jax.Array  # complex64
-    scales: jax.Array  # float32
+    kernels: Kernels
+    kernels_ct: Kernels
+    scales: Scales
 
     margin: int = eqx.field(static=True)
     dtype: jnp.dtype = eqx.field(static=True)
@@ -103,8 +100,6 @@ class LithographySimulator(eqx.Module):
             dose: float = d.DOSE,
             resist_threshold: float = d.RESIST_THRESHOLD,
             resist_steepness: float = d.RESIST_STEEPNESS,
-            binarization_threshold: float | None = None,
-            print_threshold: float | None = None,
             dtype: jnp.dtype = d.DTYPE,
             margin: int = 0,
     ):
@@ -118,19 +113,10 @@ class LithographySimulator(eqx.Module):
           dose: Exposure dose multiplier.
           resist_threshold: Aerial intensity threshold τ_I (sigmoid midpoint on I).
           resist_steepness: Sigmoid steepness α for the resist response.
-          binarization_threshold: Deprecated; τ_b is fixed to 0.5.
-          print_threshold: Deprecated; τ_b is fixed to 0.5.
           dtype: Numeric dtype for internal computations.
           margin: Symmetric padding (in pixels) applied around inputs and removed
             from outputs; useful to reduce boundary artifacts.
         """
-        if binarization_threshold is not None or print_threshold is not None:
-            warnings.warn(
-                "binarization_threshold/print_threshold are ignored; lithox uses a fixed τ_b=0.5.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         self.margin = margin
         self.kernel_type = kernel_type
 
@@ -150,11 +136,7 @@ class LithographySimulator(eqx.Module):
         self.kernels = jax.lax.stop_gradient(kernels).astype(dtype=DTYPE_COMPUTE_COMPLEX)
         self.kernels_ct = jax.lax.stop_gradient(kernels_ct).astype(dtype=DTYPE_COMPUTE_COMPLEX)
 
-    def __call__(
-            self,
-            mask: ArrayLike,
-            margin: int | None = None,
-    ) -> SimulationOutput:
+    def __call__(self, mask: ArrayLike, margin: int | None = None) -> SimulationOutput:
         """Run the full simulation pipeline on a mask.
 
         Steps:
@@ -179,7 +161,7 @@ class LithographySimulator(eqx.Module):
         resist = self.simulate_resist_from_aerial(aerial=aerial)
         return SimulationOutput(aerial=aerial, resist=resist)
 
-    def simulate_aerial_from_mask(self, mask: jax.Array, margin: int | None = None) -> jax.Array:
+    def simulate_aerial_from_mask(self, mask: Image, margin: int | None = None) -> Image:
         """Simulate aerial intensity from a mask.
 
         Applies frequency-domain convolution with a bank of kernels and combines
@@ -214,7 +196,7 @@ class LithographySimulator(eqx.Module):
 
         return aerial.astype(self.dtype)
 
-    def simulate_resist_from_aerial(self, aerial: jax.Array) -> jax.Array:
+    def simulate_resist_from_aerial(self, aerial: Image) -> Image:
         """Compute resist activation R = σ(α(I − τ_I)) from aerial intensity.
 
         Matches the compact resist model in MOSAIC and Neural-ILT (one sigmoid
@@ -252,9 +234,9 @@ class LithographySimulator(eqx.Module):
 
 
 def convolve_frequency_domain(
-    image_stack: jax.Array,
-    kernels_fourier: jax.Array,
-) -> jax.Array:
+    image_stack: Complex[Array, "*batch K H W"] | Complex[Array, "*batch 1 H W"] | Float[Array, "*batch K H W"] | Float[Array, "*batch 1 H W"],
+    kernels_fourier: Kernels,
+) -> Complex[Array, "*batch K H W"]:
     """Apply frequency-domain convolution to a stack of fields.
 
     No additional padding is applied; callers should manage padding/cropping if
@@ -291,12 +273,12 @@ def convolve_frequency_domain(
 
 @jax.custom_vjp
 def simulate_aerial_from_mask(
-    mask: jax.Array,
+    mask: Image,
     dose: float,
-    kernels_fourier: jax.Array,      # [K,Hk,Wk] complex
-    kernels_fourier_ct: jax.Array,   # [K,Hk,Wk] complex (used in backward)
-    scales: jax.Array,               # [K] ≥ 0
-) -> jax.Array:
+    kernels_fourier: Kernels,
+    kernels_fourier_ct: Kernels,
+    scales: Scales,
+) -> Image:
     """Compute aerial intensity from a mask using kernel bank convolution.
 
     The forward model:
@@ -329,11 +311,11 @@ def simulate_aerial_from_mask(
 
 
 def simulate_aerial_from_mask_fwd(
-    mask: jax.Array,
+    mask: Image,
     dose: float,
-    kernels_fourier: jax.Array,
-    kernels_fourier_ct: jax.Array,
-    scales: jax.Array,
+    kernels_fourier: Kernels,
+    kernels_fourier_ct: Kernels,
+    scales: Scales,
 ):
     """Forward pass for custom VJP.
 
@@ -371,8 +353,8 @@ def simulate_aerial_from_mask_fwd(
 
 
 def simulate_aerial_from_mask_bwd(
-    residuals: tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, float],
-    grad_aerial: jax.Array,
+    residuals: tuple[Image, Complex[Array, "*batch K H W"], Kernels, Kernels, Scales, float],
+    grad_aerial: Image,
 ):
     """Backward pass (VJP) for `simulate_aerial_from_mask`.
 
