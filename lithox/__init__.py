@@ -6,8 +6,10 @@ from lithox.variation import ProcessVariationSimulator, ProcessVariationOutput, 
 from lithox.utilities.io import load_image
 
 __all__ = [
-    'LithographySimulator',
-    'SimulationOutput',
-    'ProcessVariationSimulator',
-    'ProcessVariationOutput',
+    "LithographySimulator",
+    "SimulationOutput",
+    "ProcessVariationSimulator",
+    "ProcessVariationOutput",
+    "Variants",
+    "load_image",
 ]
