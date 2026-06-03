@@ -30,8 +30,8 @@ class Variants:
 class ProcessVariationOutput:
     """Outputs of a process-variation sweep grouped by stage.
 
-    After `__call__`, aerial/resist are stacked on corner axis 0 (nominal, max, min)
-    inside `_variants_from_stacked`; PVB maps are derived without re-simulation.
+    After `__call__`, corners are split into `Variants`; PVB maps are derived
+    without re-simulation. Printed images use each corner's `SimulationOutput.printed`.
 
     Attributes:
       aerial: Aerial intensity images for (nominal, max, min).
@@ -65,18 +65,22 @@ class ProcessVariationOutput:
         return self.pvb_loss_map.mean(axis=(-2, -1))
 
 
-def _variants_from_stacked(stacked: SimulationOutput) -> ProcessVariationOutput:
-    """Split a corner-stacked `SimulationOutput` into per-stage `Variants`."""
-    tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, jnp.float32)
-    printed = (stacked.resist > tau_b).astype(stacked.resist.dtype)
+def _variants_from_corners(
+    corners: tuple[SimulationOutput, SimulationOutput, SimulationOutput],
+) -> ProcessVariationOutput:
+    """Split nominal / max / min `SimulationOutput` corners into `Variants`."""
 
-    def _split(field: jax.Array) -> Variants:
-        return Variants(nominal=field[0], max=field[1], min=field[2])
+    def _split(field: str) -> Variants:
+        return Variants(
+            nominal=getattr(corners[0], field),
+            max=getattr(corners[1], field),
+            min=getattr(corners[2], field),
+        )
 
     return ProcessVariationOutput(
-        aerial=_split(stacked.aerial),
-        resist=_split(stacked.resist),
-        printed=_split(printed),
+        aerial=_split("aerial"),
+        resist=_split("resist"),
+        printed=_split("printed"),
     )
 
 
@@ -160,8 +164,4 @@ class ProcessVariationSimulator(eqx.Module):
             self.max_simulator(mask, margin=margin),
             self.min_simulator(mask, margin=margin),
         )
-        stacked = SimulationOutput(
-            aerial=jnp.stack([c.aerial for c in corners], axis=0),
-            resist=jnp.stack([c.resist for c in corners], axis=0),
-        )
-        return _variants_from_stacked(stacked)
+        return _variants_from_corners(corners)

@@ -24,6 +24,13 @@ Kernels: TypeAlias = Complex[Array, "K H W"]
 Scales: TypeAlias = Float[Array, "K"]
 
 
+def printed_from_resist(resist: Image) -> Image:
+    """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD] from resist activation."""
+    resist_f = resist.astype(DTYPE_COMPUTE_REAL)
+    tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
+    return (resist_f > tau_b).astype(resist.dtype)
+
+
 @dataclass
 class SimulationOutput:
     """Container for simulator outputs.
@@ -47,9 +54,7 @@ class SimulationOutput:
     @property
     def printed(self) -> Image:
         """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD]."""
-        resist_f = self.resist.astype(DTYPE_COMPUTE_REAL)
-        tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
-        return (resist_f > tau_b).astype(self.resist.dtype)
+        return printed_from_resist(self.resist)
 
     @property
     def printed_ste(self) -> Image:
@@ -227,7 +232,7 @@ class LithographySimulator(eqx.Module):
         aerial = aerial.astype(dtype=DTYPE_COMPUTE_REAL)
         resist_steepness = jnp.asarray(self.resist_steepness, DTYPE_COMPUTE_REAL)
         resist_threshold = jnp.asarray(self.resist_threshold, DTYPE_COMPUTE_REAL)
-        resist =  jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
+        resist = jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
         return resist.astype(dtype=self.dtype)
 
     # NOTE: `printed` / `printed_ste` are derived on `SimulationOutput`.
