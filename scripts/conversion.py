@@ -1,6 +1,10 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
+"""One-off maintainer script: convert LithoBench .pt tensors to packaged .npy files.
 
+Requires PyTorch (not a lithox runtime dependency):
+  pip install torch
+"""
 from pathlib import Path
 
 import numpy as np
