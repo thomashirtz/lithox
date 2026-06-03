@@ -84,3 +84,29 @@ def test_mask_below_minimum_size_raises(simulator):
     mask = jnp.ones((d.MIN_MASK_SIZE - 1, d.MIN_MASK_SIZE - 1), dtype=jnp.float32)
     with pytest.raises(ValueError, match=f"at least {d.MIN_MASK_SIZE}"):
         simulator(mask)
+
+
+def test_gradient_through_aerial(simulator, random_mask):
+    def loss(mask):
+        return simulator(mask).aerial.sum()
+
+    grad = jax.grad(loss)(random_mask)
+    grad = jax.device_get(grad)
+    assert grad.shape == random_mask.shape
+    assert jnp.isfinite(grad).all()
+    assert not jnp.allclose(grad, 0.0)
+
+
+def test_random_mask_outputs_finite(simulator, random_mask):
+    out = simulator(random_mask)
+    for field in (out.aerial, out.resist, out.printed):
+        data = jax.device_get(field)
+        assert jnp.isfinite(data).all()
+
+
+def test_margin_preserves_spatial_shape(simulator, random_mask):
+    margin = 8
+    sim_padded = LithographySimulator(margin=margin)
+    out = sim_padded(random_mask)
+    assert out.aerial.shape == random_mask.shape
+    assert out.resist.shape == random_mask.shape

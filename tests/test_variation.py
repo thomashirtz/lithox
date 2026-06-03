@@ -32,3 +32,26 @@ def test_pvb_loss_finite(pvs, small_mask):
     assert jnp.isfinite(loss_map).all()
     assert loss_map.min() >= 0.0
     assert loss_map.max() <= 1.0
+
+
+def test_gradient_through_pvb_loss_mean(pvs, random_mask):
+    def loss(mask):
+        return pvs(mask).pvb_loss_mean
+
+    grad = jax.grad(loss)(random_mask)
+    grad = jax.device_get(grad)
+    assert grad.shape == random_mask.shape
+    assert jnp.isfinite(grad).all()
+
+
+def test_printed_matches_per_corner_simulator(pvs, random_mask):
+    """PV printed variants use each corner's SimulationOutput.printed."""
+    pv = pvs(random_mask)
+    for corner_name, sim in (
+        ("nominal", pvs.nominal_simulator),
+        ("max", pvs.max_simulator),
+        ("min", pvs.min_simulator),
+    ):
+        expected = jax.device_get(sim(random_mask).printed)
+        actual = jax.device_get(getattr(pv.printed, corner_name))
+        assert jnp.allclose(actual, expected)
