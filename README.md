@@ -14,7 +14,7 @@ For local development (tests, plotting, URL image loading, ...):
 pip install -e ".[dev]"
 ```
 
-> When constructing simulators, JAX may warn that arrays are treated as static Equinox fields. That is expected for bundled kernels; example scripts filter this warning.
+**Dependencies:** `jax>=0.8.0` (tested with 0.10.1; avoid 0.7.0–0.7.1 with Equinox). Bundled Hopkins kernels are stored as static Equinox fields so they are not traced during `jit` / `grad`.
 
 ## Theory
 
