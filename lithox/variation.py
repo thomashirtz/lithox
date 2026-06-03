@@ -33,7 +33,7 @@ class ProcessVariationOutput:
     Attributes:
       aerial: Aerial intensity images for (nominal, max, min).
       resist: Resist activations for (nominal, max, min).
-      printed: Binary printed results for (nominal, max, min).
+      printed: Hard prints P at (nominal, max, min) corners (derived per corner).
     """
     aerial: Variants
     resist: Variants
@@ -76,8 +76,8 @@ class ProcessVariationSimulator(eqx.Module):
           dose_nominal: Dose for the nominal (baseline) simulator.
           dose_min: Dose for the minimum-dose/defocus simulator.
           dose_max: Dose for the maximum-dose simulator.
-          resist_threshold: Midpoint of the resist sigmoid.
-          resist_steepness: Slope of the resist sigmoid.
+          resist_threshold: Intensity threshold τ on I (sigmoid midpoint).
+          resist_steepness: Sigmoid steepness α.
           dtype: Numeric dtype for internal computations.
           margin: Symmetric padding in pixels applied inside each simulator.
         """

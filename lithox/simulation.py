@@ -31,13 +31,15 @@ class SimulationOutput:
     Notation (MOSAIC [Gao DAC'14], Neural-ILT [Jiang ICCAD'20]):
       I — aerial intensity (`aerial`)
       R — resist activation (`resist`); many papers denote this Z
-      P — printed pattern (`printed`) with fixed threshold τ_b=0.5 (derived)
+      P — printed pattern (`printed` property) with fixed binarization at 0.5
 
     Attributes:
-      aerial: Aerial intensity image as a JAX array with shape (height, width) or
-        with leading batch-like dimensions.
-      resist: Resist activation R = σ(α(I − τ_I)) in (0, 1).
-      printed: Binary print P = 𝟙[R > τ_b] with τ_b=0.5 (computed on demand).
+      aerial: Aerial intensity I.
+      resist: Resist activation R = σ(α(I − τ)) in (0, 1).
+
+    Properties:
+      printed: Binary print P = 𝟙[R > 0.5].
+      printed_ste: Binary forward, gradients through R (straight-through).
     """
     aerial: Image
     resist: Image
@@ -60,18 +62,19 @@ class SimulationOutput:
 class LithographySimulator(eqx.Module):
     """End-to-end lithography simulator module.
 
-    This module performs three stages:
-    1) Aerial image simulation from a binary/real-valued mask via frequency-domain
-       convolution with precomputed Fourier-space kernels.
-    2) Resist response via a sigmoid nonlinearity.
-    3) Printed pattern via thresholding of the resist response.
+    This module performs two forward stages:
+    1) Aerial image simulation from a mask via frequency-domain convolution with
+       precomputed Fourier-space kernels.
+    2) Resist response R = σ(α(I − τ)) via a sigmoid on aerial intensity.
+
+    Binary print P is derived on `SimulationOutput` (hard threshold or STE).
 
     The module can be configured with different kernel sets (e.g., "focus", "defocus"),
     dose levels, thresholds, and numeric dtype. Kernels/scales are treated as constants.
 
     Attributes:
       dose: Exposure dose multiplier applied to the input mask.
-      resist_threshold: Intensity midpoint τ_I for the resist sigmoid (on aerial I).
+      resist_threshold: Intensity threshold τ on I (sigmoid midpoint).
       resist_steepness: Sigmoid steepness α for the resist response.
       kernels: Fourier-domain kernels with shape [K, Hk, Wk] (complex).
       kernels_ct: Conjugate/transpose-related Fourier-domain kernels used in backward pass.
@@ -111,7 +114,7 @@ class LithographySimulator(eqx.Module):
         Args:
           kernel_type: Which kernel set to use ("focus" or "defocus").
           dose: Exposure dose multiplier.
-          resist_threshold: Aerial intensity threshold τ_I (sigmoid midpoint on I).
+          resist_threshold: Intensity threshold τ on I (sigmoid midpoint).
           resist_steepness: Sigmoid steepness α for the resist response.
           dtype: Numeric dtype for internal computations.
           margin: Symmetric padding (in pixels) applied around inputs and removed
@@ -141,10 +144,11 @@ class LithographySimulator(eqx.Module):
 
         Steps:
           1) Optional symmetric padding by `margin` (or `self.margin` if None).
-          2) Aerial simulation.
-          3) Resist response R = σ(α(I − τ_I)).
-          4) Printed result P = 𝟙[R > 0.5].
-          5) Optional cropping to remove the initial padding.
+          2) Aerial simulation I.
+          3) Resist response R = σ(α(I − τ)).
+          4) Optional cropping to remove the initial padding.
+
+        Use `SimulationOutput.printed` or `.printed_ste` for P (not computed here).
 
         Args:
           mask: Input mask array with last two axes (height, width); leading
@@ -152,8 +156,8 @@ class LithographySimulator(eqx.Module):
           margin: Overrides the instance padding when provided.
 
         Returns:
-          SimulationOutput with fields (aerial, resist, printed), each matching
-          the spatial size of the original `mask`.
+          SimulationOutput with `aerial` and `resist`, each matching the spatial
+          size of the original `mask`.
         """
         mask = jnp.asarray(mask, self.dtype)
 
@@ -197,7 +201,7 @@ class LithographySimulator(eqx.Module):
         return aerial.astype(self.dtype)
 
     def simulate_resist_from_aerial(self, aerial: Image) -> Image:
-        """Compute resist activation R = σ(α(I − τ_I)) from aerial intensity.
+        """Compute resist activation R = σ(α(I − τ)) from aerial intensity.
 
         Matches the compact resist model in MOSAIC and Neural-ILT (one sigmoid
         on intensity; no separate development nonlinearity). Many ILT papers
