@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-
 import pytest
 
 from lithox.variation import ProcessVariationSimulator, ProcessVariationOutput
@@ -22,13 +21,13 @@ def test_process_variation_smoke(pvs, small_mask):
 
 
 def test_pvb_map_binary(pvs, small_mask):
-    pvb = jax.device_get(pvs.get_pvb_map(small_mask))
+    pvb = jax.device_get(pvs(small_mask).pvb_map)
     assert pvb.shape == (MASK_SIZE, MASK_SIZE)
     assert set(jnp.unique(pvb).tolist()).issubset({0.0, 1.0})
 
 
 def test_pvb_loss_finite(pvs, small_mask):
-    loss_map = jax.device_get(pvs.get_pvb_loss_map(small_mask))
+    loss_map = jax.device_get(pvs(small_mask).pvb_loss_map)
     assert loss_map.shape == (MASK_SIZE, MASK_SIZE)
     assert jnp.isfinite(loss_map).all()
     assert loss_map.min() >= 0.0

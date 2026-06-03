@@ -8,7 +8,7 @@ from chex import dataclass
 from jaxtyping import Array, Float
 
 import lithox.defaults as d
-from lithox.simulation import LithographySimulator
+from lithox.simulation import LithographySimulator, SimulationOutput
 
 Image = Float[Array, "*batch H W"]
 
@@ -30,22 +30,61 @@ class Variants:
 class ProcessVariationOutput:
     """Outputs of a process-variation sweep grouped by stage.
 
+    After `__call__`, aerial/resist are stacked on corner axis 0 (nominal, max, min)
+    inside `_variants_from_stacked`; PVB maps are derived without re-simulation.
+
     Attributes:
       aerial: Aerial intensity images for (nominal, max, min).
       resist: Resist activations for (nominal, max, min).
-      printed: Hard prints P at (nominal, max, min) corners (derived per corner).
+      printed: Hard prints P at (nominal, max, min) corners.
     """
     aerial: Variants
     resist: Variants
     printed: Variants
 
+    @property
+    def pvb_map(self) -> Image:
+        """Metric PVB: P_max − P_min per pixel (values in {0, 1})."""
+        p_max = self.printed.max.astype(jnp.float32)
+        p_min = self.printed.min.astype(jnp.float32)
+        return p_max - p_min
+
+    @property
+    def pvb_loss_map(self) -> Image:
+        """Differentiable PVB proxy: R_max − R_min per pixel."""
+        return (self.resist.max - self.resist.min).astype(jnp.float32)
+
+    @property
+    def pvb_mean(self) -> jax.Array:
+        """Mean metric PVB over spatial dimensions."""
+        return self.pvb_map.mean(axis=(-2, -1))
+
+    @property
+    def pvb_loss_mean(self) -> jax.Array:
+        """Mean differentiable PVB proxy over spatial dimensions."""
+        return self.pvb_loss_map.mean(axis=(-2, -1))
+
+
+def _variants_from_stacked(stacked: SimulationOutput) -> ProcessVariationOutput:
+    """Split a corner-stacked `SimulationOutput` into per-stage `Variants`."""
+    tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, jnp.float32)
+    printed = (stacked.resist > tau_b).astype(stacked.resist.dtype)
+
+    def _split(field: jax.Array) -> Variants:
+        return Variants(nominal=field[0], max=field[1], min=field[2])
+
+    return ProcessVariationOutput(
+        aerial=_split(stacked.aerial),
+        resist=_split(stacked.resist),
+        printed=_split(printed),
+    )
+
 
 class ProcessVariationSimulator(eqx.Module):
     """Wrap three lithography simulators to model process variations.
 
-    Combines three `LithographySimulator` instances (nominal, max, min) that
-    differ in dose and kernel focus/defocus to evaluate sensitivity across the
-    pipeline (aerial → resist → printed).
+    A single `__call__` evaluates all corners; use `ProcessVariationOutput.pvb_map`
+    (and related properties) so PVB metrics do not trigger another simulation.
 
     Attributes:
       nominal_simulator: In-focus simulator at nominal dose.
@@ -81,7 +120,6 @@ class ProcessVariationSimulator(eqx.Module):
           dtype: Numeric dtype for internal computations.
           margin: Symmetric padding in pixels applied inside each simulator.
         """
-        # Nominal-dose simulator (in-focus).
         self.nominal_simulator = LithographySimulator(
             kernel_type="focus",
             dose=dose_nominal,
@@ -90,8 +128,6 @@ class ProcessVariationSimulator(eqx.Module):
             dtype=dtype,
             margin=margin,
         )
-
-        # High-dose simulator (in-focus, max dose).
         self.max_simulator = LithographySimulator(
             kernel_type="focus",
             dose=dose_max,
@@ -100,8 +136,6 @@ class ProcessVariationSimulator(eqx.Module):
             dtype=dtype,
             margin=margin,
         )
-
-        # Low-dose / defocus simulator (min dose, defocused kernels).
         self.min_simulator = LithographySimulator(
             kernel_type="defocus",
             dose=dose_min,
@@ -112,81 +146,22 @@ class ProcessVariationSimulator(eqx.Module):
         )
 
     def __call__(self, mask: Image, margin: int | None = None) -> ProcessVariationOutput:
-        """Run all three simulators on a given mask.
-
-        This evaluates the pipeline at nominal, maximum, and minimum doses and
-        groups the results by stage (aerial, resist, printed).
+        """Run nominal, max, and min corners.
 
         Args:
-          mask: Input mask array; last two axes are (height, width). Leading
-            dimensions (e.g., batch) are preserved.
-          margin: Optional override for the simulator margin; if None, each
-            simulator uses its configured margin.
-
-        Returns:
-          ProcessVariationOutput containing per-stage `Variants` (nominal/max/min).
-        """
-        out_nom = self.nominal_simulator(mask=mask, margin=margin)
-        out_max = self.max_simulator(mask=mask, margin=margin)
-        out_min = self.min_simulator(mask=mask, margin=margin)
-
-        # Group results by stage for convenience.
-        aerial = Variants(nominal=out_nom.aerial, max=out_max.aerial, min=out_min.aerial)
-        resist = Variants(nominal=out_nom.resist, max=out_max.resist, min=out_min.resist)
-        printed = Variants(nominal=out_nom.printed, max=out_max.printed, min=out_min.printed)
-
-        return ProcessVariationOutput(aerial=aerial, resist=resist, printed=printed)
-
-    def get_pvb_map(self, mask: Image, margin: int | None = None) -> Image:
-        """Metric PVB map on **binary** prints (non-differentiable).
-
-        Per-pixel `printed_max - printed_min` is 0 (robust) or 1 (sensitive).
-
-        For optimization losses, use `get_pvb_loss_map` on continuous R (`resist`).
-
-        Args:
-          mask: Input mask array.
+          mask: Input mask; last two axes are (height, width), each ≥ `MIN_MASK_SIZE`.
           margin: Optional override for the simulator margin.
 
         Returns:
-          Float32 array with the same spatial size as `mask`, values in {0, 1}.
+          ProcessVariationOutput; use `.pvb_map` / `.pvb_loss_map` without re-running.
         """
-        simulation = self(mask=mask, margin=margin)
-        printed_min, printed_max = simulation.printed.min, simulation.printed.max
-        return (printed_max.astype(jnp.float32) - printed_min.astype(jnp.float32))
-
-    def get_pvb_loss_map(self, mask: Image, margin: int | None = None) -> Image:
-        """Differentiable PVB proxy: R_max − R_min (resist at max/min corners).
-
-        Matches the common ILT loss ||Z_max − Z_min||² term on soft Z (our R);
-        gradients flow through the sigmoid resist model, not boolean PV geometry.
-
-        Args:
-          mask: Input mask array.
-          margin: Optional override for the simulator margin.
-
-        Returns:
-          Float array with the same spatial size as `mask`.
-        """
-        simulation = self(mask=mask, margin=margin)
-        r_min, r_max = simulation.resist.min, simulation.resist.max
-        return (r_max - r_min).astype(jnp.float32)
-
-    def get_pvb_loss_mean(self, mask: Image, margin: int | None = None) -> jax.Array:
-        """Mean of `get_pvb_loss_map` over spatial dimensions."""
-        return self.get_pvb_loss_map(mask=mask, margin=margin).mean(axis=(-2, -1))
-
-    def get_pvb_mean(self, mask: Image, margin: int | None = None) -> jax.Array:
-        """Return the mean Process Variation Band (PVB) over spatial dimensions.
-
-        This summarizes sensitivity as a single scalar (or one per leading
-        dimension if `mask` is batched).
-
-        Args:
-          mask: Input mask array.
-          margin: Optional override for the simulator margin.
-
-        Returns:
-          The mean of the PVB map over the last two axes (height, width).
-        """
-        return self.get_pvb_map(mask=mask, margin=margin).mean(axis=(-2, -1))
+        corners = (
+            self.nominal_simulator(mask, margin=margin),
+            self.max_simulator(mask, margin=margin),
+            self.min_simulator(mask, margin=margin),
+        )
+        stacked = SimulationOutput(
+            aerial=jnp.stack([c.aerial for c in corners], axis=0),
+            resist=jnp.stack([c.resist for c in corners], axis=0),
+        )
+        return _variants_from_stacked(stacked)

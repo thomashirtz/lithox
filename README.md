@@ -145,18 +145,15 @@ R_nom, R_max, R_min = pv_output.resist.nominal, pv_output.resist.max, pv_output.
 P_nom, P_max, P_min = pv_output.printed.nominal, pv_output.printed.max, pv_output.printed.min
 ```
 
-**Process-variation band (PVB)**
+**Process-variation band (PVB)** — from the same `pv_output` (no extra simulation):
 
-* **Metric** (binary, for reporting): `get_pvb_map` / `get_pvb_mean` — $P_{\max} - P_{\min}$ on hard prints.
-* **Loss** (differentiable, for ILT): `get_pvb_loss_map` / `get_pvb_loss_mean` — $R_{\max} - R_{\min}$ on `resist`.
+* **Metric** (binary): `pv_output.pvb_map`, `pv_output.pvb_mean` — $P_{\max} - P_{\min}$
+* **Loss** (differentiable): `pv_output.pvb_loss_map`, `pv_output.pvb_loss_mean` — $R_{\max} - R_{\min}$
 
 ```python
-# Metric PVB (boolean geometry), values in {0, 1}
-pvb_map = pvs.get_pvb_map(mask)
-pvb_mean = pvs.get_pvb_mean(mask)
-
-# Differentiable PVB proxy for optimization
-pvb_loss_map = pvs.get_pvb_loss_map(mask)
+pv_output = pvs(mask)
+pvb_map = pv_output.pvb_map
+pvb_loss_map = pv_output.pvb_loss_map
 ```
 
 <p align="center">
