@@ -29,8 +29,15 @@ include-package-data = true
 where = ["."]
 include = ["lithox*"]
 
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
 [tool.setuptools.package-data]
 "lithox" = [
   "kernels/*.npy",
   "scales/*.npy"
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
