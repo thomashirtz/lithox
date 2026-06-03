@@ -8,6 +8,14 @@ High-performance JAX-based photolithography simulation.
 pip install git+https://github.com/thomashirtz/lithox#egg=lithox
 ```
 
+For local development (tests, plotting, URL image loading, ...):
+
+```bash
+pip install -e ".[dev]"
+```
+
+> When constructing simulators, JAX may warn that arrays are treated as static Equinox fields. That is expected for bundled kernels; example scripts filter this warning.
+
 ## Theory
 
 `lithox` models partially coherent imaging via the Hopkins formulation with a coherent-mode decomposition. The formula used to compute the aerial image is:
@@ -63,7 +71,7 @@ Getting started:
 import lithox as ltx
 import matplotlib.pyplot as plt
 
-mask = ltx.load_image("./data/mask.png", size=1024) # Update the path if necessary
+mask = ltx.load_image("./data/mask.png", size=1024)
 
 simulator = ltx.LithographySimulator()
 output = simulator(mask)
@@ -100,7 +108,7 @@ plt.show()
 import lithox as ltx
 import matplotlib.pyplot as plt
 
-mask = ltx.load_image("./data/mask.png", size=1024) # Update the path if necessary
+mask = ltx.load_image("./data/mask.png", size=1024)
 
 simulator = ltx.LithographySimulator()
 output = simulator(mask)
@@ -134,9 +142,9 @@ plt.show()
 Calling it returns all three results in a structured output so you can compare aerial/resist/printed across corners.
 
 ```python
-from lithox.variation import ProcessVariationSimulator
+import lithox as ltx
 
-pvs = ProcessVariationSimulator()
+pvs = ltx.ProcessVariationSimulator()
 pv_output = pvs(mask)
 
 # Access by field:

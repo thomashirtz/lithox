@@ -17,9 +17,6 @@ dependencies = [
   "jaxtyping",
   "Pillow",
   "chex",
-  "matplotlib",
-  "requests",
-  # "torch", # Only needed for the kernel conversion, not required for simulations.
 ]
 
 [tool.setuptools]
@@ -30,7 +27,12 @@ where = ["."]
 include = ["lithox*"]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0"]
+dev = [
+  "pytest>=8.0",
+  "matplotlib>=3.8",
+  "requests>=2.31",
+  # "torch",
+]
 
 [tool.setuptools.package-data]
 "lithox" = [

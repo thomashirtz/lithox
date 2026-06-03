@@ -8,9 +8,13 @@ from urllib.parse import urlparse
 
 import jax
 import numpy as np
-import requests
 from PIL import Image
 from jax import numpy as jnp
+
+try:
+    import requests
+except ImportError:  # optional: pip install lithox[dev]
+    requests = None  # type: ignore[assignment]
 
 
 def _is_http_url(value: str | Path) -> bool:
@@ -30,6 +34,8 @@ def load_image(
 ) -> jax.Array:
     """Load a grayscale image from file or URL, resize square, and normalize to [0, 1].
 
+    URL loading requires the optional dependency: ``pip install lithox[dev]``.
+
     Args:
       path_or_url: File path or HTTP/HTTPS URL to the image.
       size: Target side length in pixels. Output shape is `(size, size)`.
@@ -41,11 +47,17 @@ def load_image(
       A `(size, size)` JAX array with values in `[0, 1]`.
 
     Raises:
+      ImportError: If `path_or_url` is a URL and `requests` is not installed.
       requests.HTTPError: On non-2xx HTTP response.
       FileNotFoundError: If the local image file is missing.
       OSError: If the image cannot be opened/decoded.
     """
     if _is_http_url(path_or_url):
+        if requests is None:
+            raise ImportError(
+                "Loading images from URLs requires requests. "
+                "Install with: pip install lithox[dev]"
+            )
         response = requests.get(str(path_or_url), timeout=request_timeout)
         response.raise_for_status()
         pil_image = Image.open(BytesIO(response.content))

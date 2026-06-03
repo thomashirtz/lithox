@@ -9,9 +9,15 @@ if "JAX_PLATFORMS" not in os.environ:
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 
 import lithox as ltx
+
+try:
+    import matplotlib.pyplot as plt
+except ImportError as exc:
+    raise SystemExit(
+        "This script requires matplotlib. Install with: pip install lithox[dev]"
+    ) from exc
 import lithox.defaults as d
 from lithox.simulation import simulate_aerial_from_mask
 

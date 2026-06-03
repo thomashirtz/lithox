@@ -1,9 +1,15 @@
 import warnings
 
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 
 import lithox as ltx
+
+try:
+    import matplotlib.pyplot as plt
+except ImportError as exc:
+    raise SystemExit(
+        "This script requires matplotlib. Install with: pip install lithox[dev]"
+    ) from exc
 
 warnings.filterwarnings(
     "ignore",
