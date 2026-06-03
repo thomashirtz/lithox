@@ -151,7 +151,8 @@ class LithographySimulator(eqx.Module):
         Use `SimulationOutput.printed` or `.printed_ste` for P (not computed here).
 
         Args:
-          mask: Input mask array with last two axes (height, width); leading
+          mask: Input mask with last two axes (height, width), each at least
+            `defaults.MIN_MASK_SIZE` (35, LithoBench kernel extent). Leading
             dimensions are preserved (e.g., batch).
           margin: Overrides the instance padding when provided.
 
@@ -160,10 +161,20 @@ class LithographySimulator(eqx.Module):
           size of the original `mask`.
         """
         mask = jnp.asarray(mask, self.dtype)
+        self._check_mask_size(mask)
 
         aerial = self.simulate_aerial_from_mask(mask=mask, margin=margin)
         resist = self.simulate_resist_from_aerial(aerial=aerial)
         return SimulationOutput(aerial=aerial, resist=resist)
+
+    def _check_mask_size(self, mask: jax.Array) -> None:
+        height, width = mask.shape[-2:]
+        min_size = d.MIN_MASK_SIZE
+        if height < min_size or width < min_size:
+            raise ValueError(
+                f"Mask spatial size must be at least {min_size}×{min_size} "
+                f"(kernel extent); got {height}×{width}."
+            )
 
     def simulate_aerial_from_mask(self, mask: Image, margin: int | None = None) -> Image:
         """Simulate aerial intensity from a mask.

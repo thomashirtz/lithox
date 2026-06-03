@@ -55,6 +55,8 @@ Gradients: custom VJP on the aerial step; sigmoid on $I$; optional STE on binari
 
 ## Simulation
 
+Mask images must be at least **35×35** pixels (last two axes). That limit comes from the bundled LithoBench coherent-mode kernels (35×35 in Fourier space).
+
 Getting started:
 
 ```python
