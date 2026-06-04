@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import pytest
 
 import lithox.defaults as d
-from lithox.simulation import LithographySimulator, SimulationOutput, _validate_kernel_bank
+from lithox.simulation import LithographySimulator, SimulationOutput
 
 from tests.constants import MASK_SIZE
 
@@ -84,7 +84,7 @@ def test_validate_kernel_bank_rejects_bad_scales():
     kernels = jnp.ones((2, 3, 3), dtype=jnp.complex64)
     scales = jnp.array([1.0, -0.1], dtype=jnp.float32)
     with pytest.raises(ValueError, match="non-negative"):
-        _validate_kernel_bank("focus", kernels, kernels, scales)
+        LithographySimulator._validate_kernel_bank("focus", kernels, kernels, scales)
 
 
 def test_mask_below_minimum_size_raises(simulator):
