@@ -24,25 +24,6 @@ Kernels: TypeAlias = Complex[Array, "K H W"]
 Scales: TypeAlias = Float[Array, "K"]
 
 
-def printed_from_resist(resist: Image) -> Image:
-    """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD] from resist activation."""
-    resist_f = resist.astype(DTYPE_COMPUTE_REAL)
-    tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
-    return (resist_f > tau_b).astype(resist.dtype)
-
-
-def resist_from_aerial(
-    aerial: Image,
-    resist_threshold: float,
-    resist_steepness: float,
-) -> Image:
-    """Resist activation R = σ(α(I − τ)) from aerial intensity I."""
-    aerial_f = aerial.astype(DTYPE_COMPUTE_REAL)
-    alpha = jnp.asarray(resist_steepness, DTYPE_COMPUTE_REAL)
-    tau = jnp.asarray(resist_threshold, DTYPE_COMPUTE_REAL)
-    return jax.nn.sigmoid(alpha * (aerial_f - tau))
-
-
 class SimulationOutput(eqx.Module):
     """Container for simulator outputs.
 
@@ -229,7 +210,7 @@ class LithographySimulator(eqx.Module):
         if margin_to_use > 0:
             mask = pad_margin_2d(mask, margin_to_use)
 
-        aerial = compute_aerial_from_mask(
+        aerial = aerial_from_mask(
             mask=mask.astype(DTYPE_COMPUTE_REAL),
             dose=self.dose,
             kernels_fourier=self.kernels,  # [K,Hk,Wk] complex
@@ -317,8 +298,27 @@ def convolve_frequency_domain(
     return centered_ifft_2d(product_ft)
 
 
+def printed_from_resist(resist: Image) -> Image:
+    """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD] from resist activation."""
+    resist_f = resist.astype(DTYPE_COMPUTE_REAL)
+    tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
+    return (resist_f > tau_b).astype(resist.dtype)
+
+
+def resist_from_aerial(
+    aerial: Image,
+    resist_threshold: float,
+    resist_steepness: float,
+) -> Image:
+    """Resist activation R = σ(α(I − τ)) from aerial intensity I."""
+    aerial_f = aerial.astype(DTYPE_COMPUTE_REAL)
+    alpha = jnp.asarray(resist_steepness, DTYPE_COMPUTE_REAL)
+    tau = jnp.asarray(resist_threshold, DTYPE_COMPUTE_REAL)
+    return jax.nn.sigmoid(alpha * (aerial_f - tau))
+
+
 @jax.custom_vjp
-def compute_aerial_from_mask(
+def aerial_from_mask(
     mask: Image,
     dose: float,
     kernels_fourier: Kernels,
@@ -356,7 +356,7 @@ def compute_aerial_from_mask(
     return jnp.sum(scales[..., None, None] * intensities, axis=-3)
 
 
-def compute_aerial_from_mask_fwd(
+def aerial_from_mask_fwd(
     mask: Image,
     dose: float,
     kernels_fourier: Kernels,
@@ -398,11 +398,11 @@ def compute_aerial_from_mask_fwd(
     return y, residuals
 
 
-def compute_aerial_from_mask_bwd(
+def aerial_from_mask_bwd(
     residuals: tuple[Image, Complex[Array, "*batch K H W"], Kernels, Kernels, Scales, float],
     grad_aerial: Image,
 ):
-    """Backward pass (VJP) for `compute_aerial_from_mask`.
+    """Backward pass (VJP) for `aerial_from_mask`.
 
     Computes the gradient w.r.t. the input mask given the gradient of the aerial
     intensity.
@@ -447,7 +447,7 @@ def compute_aerial_from_mask_bwd(
     return (grad_mask, None, None, None, None)
 
 # Bind custom_vjp rules.
-compute_aerial_from_mask.defvjp(
-    compute_aerial_from_mask_fwd,
-    compute_aerial_from_mask_bwd,
+aerial_from_mask.defvjp(
+    aerial_from_mask_fwd,
+    aerial_from_mask_bwd,
 )

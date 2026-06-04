@@ -18,7 +18,7 @@ except ImportError as exc:
         "This script requires matplotlib. Install with: pip install lithox[dev]"
     ) from exc
 import lithox.defaults as d
-from lithox.simulation import compute_aerial_from_mask
+from lithox.simulation import aerial_from_mask
 
 
 def _devices_for(platform: str) -> list[jax.Device]:
@@ -106,7 +106,7 @@ def main() -> None:
     tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, jnp.float32)
 
     def forward(mask_bhw: jax.Array) -> jax.Array:
-        aerial = compute_aerial_from_mask(
+        aerial = aerial_from_mask(
             mask=mask_bhw.astype(jnp.float32),
             dose=dose,
             kernels_fourier=kernels,

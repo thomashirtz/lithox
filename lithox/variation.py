@@ -12,7 +12,7 @@ from lithox.simulation import (
     Kernels,
     LithographySimulator,
     Scales,
-    compute_aerial_from_mask,
+    aerial_from_mask,
     printed_from_resist,
     resist_from_aerial,
 )
@@ -36,7 +36,7 @@ def _simulate_pv_corner(
     if margin > 0:
         mask_work = pad_margin_2d(mask_work, margin)
 
-    aerial = compute_aerial_from_mask(
+    aerial = aerial_from_mask(
         mask=mask_work.astype(DTYPE_COMPUTE_REAL),
         dose=dose,
         kernels_fourier=kernels_fourier,
