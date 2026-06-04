@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Final, Literal, TypeAlias
 
 import equinox as eqx
@@ -18,6 +19,13 @@ from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin
 
 DTYPE_COMPUTE_REAL: Final = jnp.float32
 DTYPE_COMPUTE_COMPLEX: Final = jnp.complex64
+
+# Bundled kernels are static Equinox fields; suppress the expected JAX warning here only.
+warnings.filterwarnings(
+    "ignore",
+    message=r"A JAX array is being set as static!.*",
+    category=UserWarning,
+)
 
 Image: TypeAlias = Float[Array, "*batch H W"]
 Kernels: TypeAlias = Complex[Array, "K H W"]
@@ -75,7 +83,8 @@ class LithographySimulator(eqx.Module):
     Binary print P is derived on `SimulationOutput` (hard threshold or STE).
 
     The module can be configured with different kernel sets (e.g., "focus", "defocus"),
-    dose levels, thresholds, and numeric dtype. Kernels/scales are treated as constants.
+    dose levels, and thresholds. Kernels/scales are static (not traced).
+    All arrays use float32 (complex64 in Fourier space).
 
     Attributes:
       dose: Exposure dose multiplier applied to the input mask.
@@ -86,19 +95,17 @@ class LithographySimulator(eqx.Module):
       scales: Non-negative per-kernel weights with shape [K].
       margin: Optional symmetric padding (in pixels) applied around inputs/outputs.
       kernel_type: String identifier of the kernel set ("focus" or "defocus").
-      dtype: JAX dtype used for internal computations (e.g., jnp.float32).
     """
 
     dose: float = eqx.field(static=True)
     resist_threshold: float = eqx.field(static=True)
     resist_steepness: float = eqx.field(static=True)
 
-    kernels: Kernels
-    kernels_ct: Kernels
-    scales: Scales
+    kernels: Kernels = eqx.field(static=True)
+    kernels_ct: Kernels = eqx.field(static=True)
+    scales: Scales = eqx.field(static=True)
 
     margin: int = eqx.field(static=True)
-    dtype: jnp.dtype = eqx.field(static=True)
     kernel_type: Literal["focus", "defocus"] = eqx.field(static=True)
 
     def __init__(
@@ -108,7 +115,6 @@ class LithographySimulator(eqx.Module):
             dose: float = d.DOSE,
             resist_threshold: float = d.RESIST_THRESHOLD,
             resist_steepness: float = d.RESIST_STEEPNESS,
-            dtype: jnp.dtype = d.DTYPE,
             margin: int = 0,
     ):
         """Initialize a LithographySimulator.
@@ -121,16 +127,11 @@ class LithographySimulator(eqx.Module):
           dose: Exposure dose multiplier.
           resist_threshold: Intensity threshold τ on I (sigmoid midpoint).
           resist_steepness: Sigmoid steepness α for the resist response.
-          dtype: Numeric dtype for internal computations.
           margin: Symmetric padding (in pixels) applied around inputs and removed
             from outputs; useful to reduce boundary artifacts.
         """
         self.margin = margin
         self.kernel_type = kernel_type
-
-        if dtype not in (jnp.float32, jnp.bfloat16):
-            raise ValueError(f"dtype must be float32 or bfloat16; got {dtype}.")
-        self.dtype = dtype
 
         self.dose = float(dose)
         self.resist_threshold = float(resist_threshold)
@@ -140,9 +141,9 @@ class LithographySimulator(eqx.Module):
         kernels_ct = load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
         scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
 
-        self.scales = jax.lax.stop_gradient(scales).astype(dtype=DTYPE_COMPUTE_REAL)
-        self.kernels = jax.lax.stop_gradient(kernels).astype(dtype=DTYPE_COMPUTE_COMPLEX)
-        self.kernels_ct = jax.lax.stop_gradient(kernels_ct).astype(dtype=DTYPE_COMPUTE_COMPLEX)
+        self.scales = scales.astype(dtype=DTYPE_COMPUTE_REAL)
+        self.kernels = kernels.astype(dtype=DTYPE_COMPUTE_COMPLEX)
+        self.kernels_ct = kernels_ct.astype(dtype=DTYPE_COMPUTE_COMPLEX)
 
     def __call__(self, mask: ArrayLike, margin: int | None = None) -> SimulationOutput:
         """Run the full simulation pipeline on a mask.
@@ -156,16 +157,16 @@ class LithographySimulator(eqx.Module):
         Use `SimulationOutput.printed` or `.printed_ste` for P (not computed here).
 
         Args:
-          mask: Input mask with last two axes (height, width), each at least
-            `defaults.MIN_MASK_SIZE` (35, LithoBench kernel extent). Leading
-            dimensions are preserved (e.g., batch).
+          mask: Input mask (any real dtype); cast to float32 internally. Last two
+            axes are (height, width), each at least `defaults.MIN_MASK_SIZE` (35).
+            Leading dimensions are preserved (e.g., batch).
           margin: Overrides the instance padding when provided.
 
         Returns:
-          SimulationOutput with `aerial` and `resist`, each matching the spatial
-          size of the original `mask`.
+          SimulationOutput with float32 `aerial` and `resist`, same spatial shape
+          as the input `mask`.
         """
-        mask = jnp.asarray(mask, self.dtype)
+        mask = jnp.asarray(mask, dtype=DTYPE_COMPUTE_REAL)
         self._check_mask_size(mask)
 
         aerial = self.simulate_aerial_from_mask(mask=mask, margin=margin)
@@ -214,7 +215,7 @@ class LithographySimulator(eqx.Module):
         if margin_to_use > 0:
             aerial = crop_margin_2d(aerial, margin_to_use)
 
-        return aerial.astype(self.dtype)
+        return aerial
 
     def simulate_resist_from_aerial(self, aerial: Image) -> Image:
         """Compute resist activation R = σ(α(I − τ)) from aerial intensity.
@@ -232,8 +233,7 @@ class LithographySimulator(eqx.Module):
         aerial = aerial.astype(dtype=DTYPE_COMPUTE_REAL)
         resist_steepness = jnp.asarray(self.resist_steepness, DTYPE_COMPUTE_REAL)
         resist_threshold = jnp.asarray(self.resist_threshold, DTYPE_COMPUTE_REAL)
-        resist = jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
-        return resist.astype(dtype=self.dtype)
+        return jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
 
     # NOTE: `printed` / `printed_ste` are derived on `SimulationOutput`.
 

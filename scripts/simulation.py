@@ -1,5 +1,3 @@
-import warnings
-
 import lithox as ltx
 
 try:
@@ -8,11 +6,6 @@ except ImportError as exc:
     raise SystemExit(
         "This script requires matplotlib. Install with: pip install lithox[dev]"
     ) from exc
-
-warnings.filterwarnings(
-    "ignore",
-    message="A JAX array is being set as static!.*"
-)
 
 if __name__ == '__main__':
 

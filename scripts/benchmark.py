@@ -1,6 +1,5 @@
 import os
 import time
-import warnings
 from pathlib import Path
 
 # Set before JAX is imported (including transitively via lithox).
@@ -56,8 +55,6 @@ def _time_call(fn, *, repeats: int) -> float:
 
 
 def main() -> None:
-    warnings.filterwarnings("ignore", message="A JAX array is being set as static!.*")
-
     try:
         import jaxlib  # type: ignore
         jaxlib_version = getattr(jaxlib, "__version__", "unknown")
@@ -98,9 +95,7 @@ def main() -> None:
 
     sizes = [64, 128, 256, 512, 1024]
     batch = 4
-    dtype = jnp.float32
-
-    sim = ltx.LithographySimulator(dtype=dtype)
+    sim = ltx.LithographySimulator()
 
     kernels = sim.kernels
     kernels_ct = sim.kernels_ct
@@ -130,7 +125,9 @@ def main() -> None:
         for n in sizes:
             nonlocal key
             key, sub = jax.random.split(key)
-            mask = jax.random.uniform(sub, shape=(batch, n, n), dtype=dtype, minval=0.0, maxval=1.0)
+            mask = jax.random.uniform(
+                sub, shape=(batch, n, n), dtype=jnp.float32, minval=0.0, maxval=1.0
+            )
             mask = jax.device_put(mask, dev)
 
             def run():
@@ -169,7 +166,7 @@ def main() -> None:
     ax.set_yscale("log")
     ax.set_xlabel("Image size (N×N)")
     ax.set_ylabel("Time (s)")
-    ax.set_title(f"lithox benchmark (batch={batch}, dtype={dtype})")
+    ax.set_title(f"lithox benchmark (batch={batch}, float32)")
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
     ax.legend()
 

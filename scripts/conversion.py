@@ -8,7 +8,11 @@ Requires PyTorch (not a lithox runtime dependency):
 from pathlib import Path
 
 import numpy as np
-import torch
+
+try:
+    import torch
+except ImportError as exc:
+    raise SystemExit("This script requires PyTorch: pip install torch") from exc
 
 
 def convert_pt_to_npy(source_path: str, output_path: str, permute: bool = False) -> None:

@@ -11,7 +11,7 @@ license = "BSD-3-Clause"
 license-files = ["LICENSE.md"]
 
 dependencies = [
-  "jax>=0.8.0",
+  "jax>=0.8.0,!=0.7.0,!=0.7.1",
   "numpy",
   "equinox>=0.13.0",
   "jaxtyping",
@@ -43,6 +43,3 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-filterwarnings = [
-  "ignore:A JAX array is being set as static!:UserWarning",
-]

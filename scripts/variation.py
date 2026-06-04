@@ -1,5 +1,3 @@
-import warnings
-
 import jax.numpy as jnp
 
 import lithox as ltx
@@ -10,11 +8,6 @@ except ImportError as exc:
     raise SystemExit(
         "This script requires matplotlib. Install with: pip install lithox[dev]"
     ) from exc
-
-warnings.filterwarnings(
-    "ignore",
-    message="A JAX array is being set as static!.*"
-)
 
 if __name__ == '__main__':
 

@@ -107,12 +107,11 @@ class ProcessVariationSimulator(eqx.Module):
         dose_max: float = d.DOSE_MAX,
         resist_threshold: float = d.RESIST_THRESHOLD,
         resist_steepness: float = d.RESIST_STEEPNESS,
-        dtype: jnp.dtype = d.DTYPE,
         margin: int = 0,
     ):
         """Initialize the trio of simulators used for the variation sweep.
 
-        All three simulators share the same resist/print parameters and dtype.
+        All three simulators share the same resist/print parameters.
         They differ only by kernel set and dose.
 
         Args:
@@ -121,7 +120,6 @@ class ProcessVariationSimulator(eqx.Module):
           dose_max: Dose for the maximum-dose simulator.
           resist_threshold: Intensity threshold τ on I (sigmoid midpoint).
           resist_steepness: Sigmoid steepness α.
-          dtype: Numeric dtype for internal computations.
           margin: Symmetric padding in pixels applied inside each simulator.
         """
         self.nominal_simulator = LithographySimulator(
@@ -129,7 +127,6 @@ class ProcessVariationSimulator(eqx.Module):
             dose=dose_nominal,
             resist_threshold=resist_threshold,
             resist_steepness=resist_steepness,
-            dtype=dtype,
             margin=margin,
         )
         self.max_simulator = LithographySimulator(
@@ -137,7 +134,6 @@ class ProcessVariationSimulator(eqx.Module):
             dose=dose_max,
             resist_threshold=resist_threshold,
             resist_steepness=resist_steepness,
-            dtype=dtype,
             margin=margin,
         )
         self.min_simulator = LithographySimulator(
@@ -145,7 +141,6 @@ class ProcessVariationSimulator(eqx.Module):
             dose=dose_min,
             resist_threshold=resist_threshold,
             resist_steepness=resist_steepness,
-            dtype=dtype,
             margin=margin,
         )
 
