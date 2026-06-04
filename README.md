@@ -57,7 +57,7 @@ For mask optimization, use $R$ in the loss, or use straight-through binarization
 * $R\in(0,1)^{H\times W}$: resist activation (`output.resist`; papers often call this $Z$).
 * $P$: binary print (`output.printed`).
 
-Gradients: custom VJP on the aerial step; sigmoid on $I$; optional STE on binarization (`output.printed_ste`).
+Gradients: custom VJP on the aerial step; sigmoid on $I$; optional STE on binarization (`output.printed_ste`). **`jax.grad` and `jax.jit` differentiate with respect to the mask** (and any leading batch axes). Exposure dose, bundled Hopkins kernels, and per-mode scales are fixed at construction time and are not differentiated.
 
 > The coherent-mode kernels and weights used by lithox are taken from the [lithobench](https://github.com/shelljane/lithobench) project and redistributed here for convenience.
 >

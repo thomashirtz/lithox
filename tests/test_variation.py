@@ -65,6 +65,29 @@ def test_batched_mask_corners(pvs, batched_mask):
     assert out.printed.min.shape == batched_mask.shape
 
 
+def test_pv_margin_preserves_shape(random_mask):
+    margin = 8
+    pvs = ProcessVariationSimulator(margin=margin)
+    out = pvs(random_mask)
+    assert out.aerial.nominal.shape == random_mask.shape
+    assert out.resist.max.shape == random_mask.shape
+    assert out.printed.min.shape == random_mask.shape
+
+
+def test_pv_margin_matches_per_corner_simulator(random_mask):
+    margin = 8
+    pvs = ProcessVariationSimulator(margin=margin)
+    pv = pvs(random_mask)
+    for corner_name, sim in (
+        ("nominal", pvs.nominal_simulator),
+        ("max", pvs.max_simulator),
+        ("min", pvs.min_simulator),
+    ):
+        expected = jax.device_get(sim(random_mask).aerial)
+        actual = jax.device_get(getattr(pv.aerial, corner_name))
+        assert jnp.allclose(actual, expected, rtol=1e-5, atol=1e-6)
+
+
 def test_batched_pv_matches_per_corner_simulator(pvs, batched_mask):
     """Batched vmapped PV matches single-corner simulators on each batch element."""
     pv = pvs(batched_mask)

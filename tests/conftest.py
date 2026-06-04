@@ -1,3 +1,6 @@
+import lithox._jax_static_warnings  # noqa: F401 — before simulators are constructed
+
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest

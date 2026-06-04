@@ -12,8 +12,9 @@ from lithox.simulation import (
     Kernels,
     LithographySimulator,
     Scales,
+    compute_aerial_from_mask,
     printed_from_resist,
-    simulate_aerial_from_mask,
+    resist_from_aerial,
 )
 from lithox.utilities.spatial import crop_margin_2d, pad_margin_2d
 
@@ -35,7 +36,7 @@ def _simulate_pv_corner(
     if margin > 0:
         mask_work = pad_margin_2d(mask_work, margin)
 
-    aerial = simulate_aerial_from_mask(
+    aerial = compute_aerial_from_mask(
         mask=mask_work.astype(DTYPE_COMPUTE_REAL),
         dose=dose,
         kernels_fourier=kernels_fourier,
@@ -45,9 +46,7 @@ def _simulate_pv_corner(
     if margin > 0:
         aerial = crop_margin_2d(aerial, margin)
 
-    steepness = jnp.asarray(resist_steepness, DTYPE_COMPUTE_REAL)
-    threshold = jnp.asarray(resist_threshold, DTYPE_COMPUTE_REAL)
-    resist = jax.nn.sigmoid(steepness * (aerial.astype(DTYPE_COMPUTE_REAL) - threshold))
+    resist = resist_from_aerial(aerial, resist_threshold, resist_steepness)
     return aerial, resist
 
 

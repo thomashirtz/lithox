@@ -1,9 +1,9 @@
 # Copyright (c) 2025, Thomas Hirtz
 # SPDX-License-Identifier: BSD-3-Clause
 
-import warnings
 from typing import Final, Literal, TypeAlias
 
+import lithox._jax_static_warnings  # noqa: F401
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -19,13 +19,6 @@ from lithox.utilities.spatial import pad_to_shape_2d, crop_margin_2d, pad_margin
 DTYPE_COMPUTE_REAL: Final = jnp.float32
 DTYPE_COMPUTE_COMPLEX: Final = jnp.complex64
 
-# Bundled kernels are static Equinox fields; suppress the expected JAX warning here only.
-warnings.filterwarnings(
-    "ignore",
-    message=r"A JAX array is being set as static!.*",
-    category=UserWarning,
-)
-
 Image: TypeAlias = Float[Array, "*batch H W"]
 Kernels: TypeAlias = Complex[Array, "K H W"]
 Scales: TypeAlias = Float[Array, "K"]
@@ -36,6 +29,18 @@ def printed_from_resist(resist: Image) -> Image:
     resist_f = resist.astype(DTYPE_COMPUTE_REAL)
     tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
     return (resist_f > tau_b).astype(resist.dtype)
+
+
+def resist_from_aerial(
+    aerial: Image,
+    resist_threshold: float,
+    resist_steepness: float,
+) -> Image:
+    """Resist activation R = σ(α(I − τ)) from aerial intensity I."""
+    aerial_f = aerial.astype(DTYPE_COMPUTE_REAL)
+    alpha = jnp.asarray(resist_steepness, DTYPE_COMPUTE_REAL)
+    tau = jnp.asarray(resist_threshold, DTYPE_COMPUTE_REAL)
+    return jax.nn.sigmoid(alpha * (aerial_f - tau))
 
 
 class SimulationOutput(eqx.Module):
@@ -224,7 +229,7 @@ class LithographySimulator(eqx.Module):
         if margin_to_use > 0:
             mask = pad_margin_2d(mask, margin_to_use)
 
-        aerial = simulate_aerial_from_mask(
+        aerial = compute_aerial_from_mask(
             mask=mask.astype(DTYPE_COMPUTE_REAL),
             dose=self.dose,
             kernels_fourier=self.kernels,  # [K,Hk,Wk] complex
@@ -250,10 +255,11 @@ class LithographySimulator(eqx.Module):
         Returns:
           Resist activation R in (0, 1) with the same shape as `aerial`.
         """
-        aerial = aerial.astype(dtype=DTYPE_COMPUTE_REAL)
-        resist_steepness = jnp.asarray(self.resist_steepness, DTYPE_COMPUTE_REAL)
-        resist_threshold = jnp.asarray(self.resist_threshold, DTYPE_COMPUTE_REAL)
-        return jax.nn.sigmoid(resist_steepness * (aerial - resist_threshold))
+        return resist_from_aerial(
+            aerial,
+            resist_threshold=self.resist_threshold,
+            resist_steepness=self.resist_steepness,
+        )
 
     # NOTE: `printed` / `printed_ste` are derived on `SimulationOutput`.
 
@@ -312,7 +318,7 @@ def convolve_frequency_domain(
 
 
 @jax.custom_vjp
-def simulate_aerial_from_mask(
+def compute_aerial_from_mask(
     mask: Image,
     dose: float,
     kernels_fourier: Kernels,
@@ -350,7 +356,7 @@ def simulate_aerial_from_mask(
     return jnp.sum(scales[..., None, None] * intensities, axis=-3)
 
 
-def simulate_aerial_from_mask_fwd(
+def compute_aerial_from_mask_fwd(
     mask: Image,
     dose: float,
     kernels_fourier: Kernels,
@@ -392,11 +398,11 @@ def simulate_aerial_from_mask_fwd(
     return y, residuals
 
 
-def simulate_aerial_from_mask_bwd(
+def compute_aerial_from_mask_bwd(
     residuals: tuple[Image, Complex[Array, "*batch K H W"], Kernels, Kernels, Scales, float],
     grad_aerial: Image,
 ):
-    """Backward pass (VJP) for `simulate_aerial_from_mask`.
+    """Backward pass (VJP) for `compute_aerial_from_mask`.
 
     Computes the gradient w.r.t. the input mask given the gradient of the aerial
     intensity.
@@ -441,7 +447,7 @@ def simulate_aerial_from_mask_bwd(
     return (grad_mask, None, None, None, None)
 
 # Bind custom_vjp rules.
-simulate_aerial_from_mask.defvjp(
-    simulate_aerial_from_mask_fwd,
-    simulate_aerial_from_mask_bwd,
+compute_aerial_from_mask.defvjp(
+    compute_aerial_from_mask_fwd,
+    compute_aerial_from_mask_bwd,
 )

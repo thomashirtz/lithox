@@ -3,6 +3,8 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+import lithox._jax_static_warnings  # noqa: F401  — Equinox static kernel fields
+
 from lithox.simulation import LithographySimulator, SimulationOutput
 from lithox.variation import ProcessVariationSimulator, ProcessVariationOutput, Variants
 from lithox.utilities.io import load_image

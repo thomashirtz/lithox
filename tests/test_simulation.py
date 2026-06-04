@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -120,6 +121,24 @@ def test_margin_preserves_spatial_shape(simulator, random_mask):
     out = sim_padded(random_mask)
     assert out.aerial.shape == random_mask.shape
     assert out.resist.shape == random_mask.shape
+
+
+def test_minimum_mask_size_runs(simulator):
+    """Mask at the kernel extent (35×35) is accepted."""
+    size = d.MIN_MASK_SIZE
+    mask = jnp.ones((size, size), dtype=jnp.float32) * 0.5
+    out = simulator(mask)
+    assert out.aerial.shape == (size, size)
+
+
+def test_jitted_simulator_matches_eager(simulator, random_mask):
+    jitted = eqx.filter_jit(simulator)
+    out_eager = simulator(random_mask)
+    out_jit = jitted(random_mask)
+    for field in ("aerial", "resist", "printed"):
+        eager = getattr(out_eager, field)
+        jit = getattr(out_jit, field)
+        assert jnp.allclose(jax.device_get(eager), jax.device_get(jit), rtol=1e-5, atol=1e-6)
 
 
 _DATA_DIR = Path(__file__).resolve().parent / "data"

@@ -44,3 +44,6 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+  "ignore:A JAX array is being set as static!:UserWarning",
+]
