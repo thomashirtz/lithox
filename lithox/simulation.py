@@ -30,41 +30,25 @@ class SimulationOutput(eqx.Module):
     Notation (MOSAIC [Gao DAC'14], Neural-ILT [Jiang ICCAD'20]):
       I — aerial intensity (`aerial`)
       R — resist activation (`resist`); many papers denote this Z
-      P — printed pattern (`printed` property) with fixed binarization at 0.5
+      P — printed pattern (`printed`) with fixed binarization at 0.5
 
     Attributes:
       aerial: Aerial intensity I.
       resist: Resist activation R = σ(α(I − τ)) in (0, 1).
-
-    Properties:
       printed: Binary print P = 𝟙[R > 0.5].
-      printed_ste: Binary forward, gradients through R (straight-through).
+      printed_ste: Binary forward matching `printed`, gradients through `resist` (STE).
     """
     aerial: Image
     resist: Image
-
-    @property
-    def printed(self) -> Image:
-        """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD]."""
-        return printed_from_resist(self.resist)
-
-    @property
-    def printed_ste(self) -> Image:
-        """Binary forward with straight-through gradients through `resist`."""
-        hard = self.printed
-        soft = self.resist.astype(hard.dtype)
-        return jax.lax.stop_gradient(hard - soft) + soft
+    printed: Image
+    printed_ste: Image
 
 
 class LithographySimulator(eqx.Module):
     """End-to-end lithography simulator module.
 
-    This module performs two forward stages:
-    1) Aerial image simulation from a mask via frequency-domain convolution with
-       precomputed Fourier-space kernels.
-    2) Resist response R = σ(α(I − τ)) via a sigmoid on aerial intensity.
-
-    Binary print P is derived on `SimulationOutput` (hard threshold or STE).
+    Forward pipeline: aerial I, resist R, hard print P, and STE print. Results are
+    returned as a `SimulationOutput` container (fields only, no computation there).
 
     The module can be configured with different kernel sets (e.g., "focus", "defocus"),
     dose levels, and thresholds. Kernels/scales are static (not traced).
@@ -156,11 +140,8 @@ class LithographySimulator(eqx.Module):
 
         Steps:
           1) Optional symmetric padding by `margin` (or `self.margin` if None).
-          2) Aerial simulation I.
-          3) Resist response R = σ(α(I − τ)).
-          4) Optional cropping to remove the initial padding.
-
-        Use `SimulationOutput.printed` or `.printed_ste` for P (not computed here).
+          2) Aerial simulation I, then optional crop.
+          3) Resist R = σ(α(I − τ)), hard print P, and STE print.
 
         Args:
           mask: Input mask (any real dtype); cast to float32 internally. Last two
@@ -169,15 +150,22 @@ class LithographySimulator(eqx.Module):
           margin: Overrides the instance padding when provided.
 
         Returns:
-          SimulationOutput with float32 `aerial` and `resist`, same spatial shape
-          as the input `mask`.
+          SimulationOutput with float32 `aerial`, `resist`, `printed`, and
+          `printed_ste`, same spatial shape as the input `mask`.
         """
         mask = jnp.asarray(mask, dtype=DTYPE_COMPUTE_REAL)
         self._check_mask_size(mask)
 
         aerial = self.simulate_aerial_from_mask(mask=mask, margin=margin)
         resist = self.simulate_resist_from_aerial(aerial=aerial)
-        return SimulationOutput(aerial=aerial, resist=resist)
+        printed = printed_from_resist(resist)
+        printed_ste = printed_ste_from_resist(resist, printed)
+        return SimulationOutput(
+            aerial=aerial,
+            resist=resist,
+            printed=printed,
+            printed_ste=printed_ste,
+        )
 
     def _check_mask_size(self, mask: jax.Array) -> None:
         height, width = mask.shape[-2:]
@@ -242,8 +230,6 @@ class LithographySimulator(eqx.Module):
             resist_steepness=self.resist_steepness,
         )
 
-    # NOTE: `printed` / `printed_ste` are derived on `SimulationOutput`.
-
     @classmethod
     def nominal(cls, **overrides) -> "LithographySimulator":
         """Factory: nominal dose, focused kernels."""
@@ -303,6 +289,12 @@ def printed_from_resist(resist: Image) -> Image:
     resist_f = resist.astype(DTYPE_COMPUTE_REAL)
     tau_b = jnp.asarray(d.BINARIZATION_THRESHOLD, DTYPE_COMPUTE_REAL)
     return (resist_f > tau_b).astype(resist.dtype)
+
+
+def printed_ste_from_resist(resist: Image, printed: Image) -> Image:
+    """Binary forward matching `printed`, with straight-through gradients through `resist`."""
+    soft = resist.astype(printed.dtype)
+    return jax.lax.stop_gradient(printed - soft) + soft
 
 
 def resist_from_aerial(
