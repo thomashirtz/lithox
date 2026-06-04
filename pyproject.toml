@@ -16,7 +16,6 @@ dependencies = [
   "equinox>=0.13.0",
   "jaxtyping",
   "Pillow",
-  "chex",
 ]
 
 [tool.setuptools]

@@ -3,9 +3,9 @@ import jax.numpy as jnp
 import pytest
 
 import lithox.defaults as d
-from lithox.simulation import LithographySimulator, SimulationOutput
+from lithox.simulation import LithographySimulator, SimulationOutput, _validate_kernel_bank
 
-from conftest import MASK_SIZE
+from tests.constants import MASK_SIZE
 
 
 @pytest.fixture
@@ -78,6 +78,13 @@ def test_gradient_through_printed_ste(simulator, small_mask):
 
 def test_binarization_threshold_constant():
     assert d.BINARIZATION_THRESHOLD == 0.5
+
+
+def test_validate_kernel_bank_rejects_bad_scales():
+    kernels = jnp.ones((2, 3, 3), dtype=jnp.complex64)
+    scales = jnp.array([1.0, -0.1], dtype=jnp.float32)
+    with pytest.raises(ValueError, match="non-negative"):
+        _validate_kernel_bank("focus", kernels, kernels, scales)
 
 
 def test_mask_below_minimum_size_raises(simulator):

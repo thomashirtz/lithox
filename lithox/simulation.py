@@ -7,7 +7,6 @@ from typing import Final, Literal, TypeAlias
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from chex import dataclass
 from jax.typing import ArrayLike
 from jaxtyping import Array, Complex, Float
 
@@ -32,6 +31,26 @@ Kernels: TypeAlias = Complex[Array, "K H W"]
 Scales: TypeAlias = Float[Array, "K"]
 
 
+def _validate_kernel_bank(
+    kernel_type: str,
+    kernels: jax.Array,
+    kernels_ct: jax.Array,
+    scales: jax.Array,
+) -> None:
+    """Fail fast on mismatched or invalid packaged kernel assets."""
+    if kernels.shape != kernels_ct.shape:
+        raise ValueError(
+            f"{kernel_type}: kernels shape {kernels.shape} != kernels_ct {kernels_ct.shape}."
+        )
+    num_modes = kernels.shape[0]
+    if scales.shape != (num_modes,):
+        raise ValueError(
+            f"{kernel_type}: scales shape {scales.shape} != ({num_modes},) kernel modes."
+        )
+    if bool(jnp.any(scales < 0)):
+        raise ValueError(f"{kernel_type}: scales must be non-negative.")
+
+
 def printed_from_resist(resist: Image) -> Image:
     """Hard print P = 𝟙[R > BINARIZATION_THRESHOLD] from resist activation."""
     resist_f = resist.astype(DTYPE_COMPUTE_REAL)
@@ -39,8 +58,7 @@ def printed_from_resist(resist: Image) -> Image:
     return (resist_f > tau_b).astype(resist.dtype)
 
 
-@dataclass
-class SimulationOutput:
+class SimulationOutput(eqx.Module):
     """Container for simulator outputs.
 
     Notation (MOSAIC [Gao DAC'14], Neural-ILT [Jiang ICCAD'20]):
@@ -140,6 +158,8 @@ class LithographySimulator(eqx.Module):
         kernels = load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}.npy")
         kernels_ct = load_npy(module="lithox.kernels", path=p.KERNELS_DIRECTORY, filename=f"{kernel_type}_ct.npy")
         scales = load_npy(module="lithox.scales", path=p.SCALES_DIRECTORY, filename=f"{kernel_type}.npy")
+
+        _validate_kernel_bank(kernel_type, kernels, kernels_ct, scales)
 
         self.scales = scales.astype(dtype=DTYPE_COMPUTE_REAL)
         self.kernels = kernels.astype(dtype=DTYPE_COMPUTE_COMPLEX)

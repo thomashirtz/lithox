@@ -4,7 +4,6 @@
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from chex import dataclass
 from jaxtyping import Array, Float
 
 import lithox.defaults as d
@@ -59,8 +58,7 @@ _simulate_pv_corners = jax.vmap(
 )
 
 
-@dataclass
-class Variants:
+class Variants(eqx.Module):
     """Container for nominal / max / min variants of a quantity.
 
     Attributes:
@@ -73,8 +71,7 @@ class Variants:
     min: Image
 
 
-@dataclass
-class ProcessVariationOutput:
+class ProcessVariationOutput(eqx.Module):
     """Outputs of a process-variation sweep grouped by stage.
 
     After `__call__`, corners are split into `Variants`; PVB maps are derived

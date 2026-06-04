@@ -4,7 +4,7 @@ import pytest
 
 from lithox.variation import ProcessVariationSimulator, ProcessVariationOutput
 
-from conftest import MASK_SIZE
+from tests.constants import MASK_SIZE
 
 
 @pytest.fixture
