@@ -139,7 +139,7 @@ plt.show()
 * **max** — in-focus, maximum dose
 * **min** — defocus, minimum dose
 
-Calling it returns all three results in a structured output so you can compare aerial/resist/printed across corners.
+Calling it returns all three results in a structured output so you can compare aerial/resist/printed across corners. Internally, the three corners are evaluated in one `jax.vmap` batch (not three sequential Python calls), so JAX can fuse the optical passes on accelerator backends.
 
 ```python
 import lithox as ltx

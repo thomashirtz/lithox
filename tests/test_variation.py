@@ -55,3 +55,24 @@ def test_printed_matches_per_corner_simulator(pvs, random_mask):
         expected = jax.device_get(sim(random_mask).printed)
         actual = jax.device_get(getattr(pv.printed, corner_name))
         assert jnp.allclose(actual, expected)
+
+
+def test_batched_mask_corners(pvs, batched_mask):
+    """Vmapped PV preserves leading batch dimensions on each variant."""
+    out = pvs(batched_mask)
+    assert out.aerial.nominal.shape == batched_mask.shape
+    assert out.resist.max.shape == batched_mask.shape
+    assert out.printed.min.shape == batched_mask.shape
+
+
+def test_batched_pv_matches_per_corner_simulator(pvs, batched_mask):
+    """Batched vmapped PV matches single-corner simulators on each batch element."""
+    pv = pvs(batched_mask)
+    for corner_name, sim in (
+        ("nominal", pvs.nominal_simulator),
+        ("max", pvs.max_simulator),
+        ("min", pvs.min_simulator),
+    ):
+        expected = jax.device_get(sim(batched_mask).aerial)
+        actual = jax.device_get(getattr(pv.aerial, corner_name))
+        assert jnp.allclose(actual, expected, rtol=1e-5, atol=1e-6)
