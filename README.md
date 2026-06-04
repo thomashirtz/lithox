@@ -60,6 +60,8 @@ For mask optimization, use $R$ in the loss, or use straight-through binarization
 Gradients: custom VJP on the aerial step; sigmoid on $I$; optional STE on binarization (`output.printed_ste`).
 
 > The coherent-mode kernels and weights used by lithox are taken from the [lithobench](https://github.com/shelljane/lithobench) project and redistributed here for convenience.
+>
+> **Kernels only:** LithoBench supplies the precomputed mode banks; the lithox forward model (centered FFT, Hopkins sum, sigmoid resist) is implemented independently and is **not** intended to match LithoBench’s PyTorch simulator byte-for-byte. Dev regression PNGs live in `tests/data/` (`aerial_lithox.png` vs `aerial_lithobench.png` on the same MetalSet mask).
 
 ## Simulation
 

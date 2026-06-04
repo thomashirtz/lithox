@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import lithox.defaults as d
@@ -117,3 +120,44 @@ def test_margin_preserves_spatial_shape(simulator, random_mask):
     out = sim_padded(random_mask)
     assert out.aerial.shape == random_mask.shape
     assert out.resist.shape == random_mask.shape
+
+
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+# Tight: lithox aerial vs saved aerial_lithox.png (8-bit PNG round-trip).
+_LITHOX_RTOL = 1e-4
+_LITHOX_ATOL = 0.005
+# Loose: vs LithoBench litho/cell0 export (different FFT pipeline).
+_LITHOBENCH_AERIAL_RTOL = 0.05
+_LITHOBENCH_AERIAL_ATOL = 0.05
+
+
+def _load_gray_png(path: Path) -> jnp.ndarray:
+    from PIL import Image
+
+    arr = np.array(Image.open(path).convert("L"), dtype=np.float32) / 255.0
+    return jnp.asarray(arr)
+
+
+@pytest.fixture
+def regression_nominal_mask():
+    return _load_gray_png(_DATA_DIR / "mask.png")
+
+
+def test_regression_nominal_lithox_tight(simulator, regression_nominal_mask):
+    """Lock aerial output against aerial_lithox.png."""
+    out = simulator(regression_nominal_mask)
+    aerial_ref = _load_gray_png(_DATA_DIR / "aerial_lithox.png")
+    assert jnp.allclose(out.aerial, aerial_ref, rtol=_LITHOX_RTOL, atol=_LITHOX_ATOL)
+
+
+def test_regression_nominal_aerial_vs_lithobench_loose(simulator, regression_nominal_mask):
+    """Aerial is in the same ballpark as LithoBench litho/cell0 (see aerial_*.png)."""
+    out = simulator(regression_nominal_mask)
+    aerial_lb = _load_gray_png(_DATA_DIR / "aerial_lithobench.png")
+    assert jnp.allclose(
+        out.aerial,
+        aerial_lb,
+        rtol=_LITHOBENCH_AERIAL_RTOL,
+        atol=_LITHOBENCH_AERIAL_ATOL,
+    )
