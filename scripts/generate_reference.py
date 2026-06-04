@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate regression PNGs under tests/data/ (dev only).
 
-    python scripts/generate_regression_reference.py
+    python scripts/generate_reference.py
 
 Set LITHOBENCH_METALSET=/path/to/MetalSet to refresh aerial_lithobench.png.
 """
