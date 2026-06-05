@@ -22,7 +22,7 @@ dependencies = [
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["lithox*"]
 
 [project.optional-dependencies]
@@ -43,7 +43,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 filterwarnings = [
   "ignore:A JAX array is being set as static!:UserWarning",
 ]

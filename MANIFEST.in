@@ -1,2 +1,2 @@
-include lithox/kernels/*.npy
-include lithox/scales/*.npy
+include src/lithox/kernels/*.npy
+include src/lithox/scales/*.npy
